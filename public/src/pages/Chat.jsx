@@ -2,7 +2,6 @@ import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
-import styled from "styled-components";
 import { allUsersRoute, host } from "../utils/APIRoutes";
 import ChatContainer from "../components/ChatContainer";
 import Contacts from "../components/Contacts";
@@ -14,70 +13,78 @@ export default function Chat() {
   const [contacts, setContacts] = useState([]);
   const [currentChat, setCurrentChat] = useState(undefined);
   const [currentUser, setCurrentUser] = useState(undefined);
-  useEffect(async () => {
-    if (!localStorage.getItem(process.env.REACT_APP_LOCALHOST_KEY)) {
+  // Define a storage key with fallback
+  const storageKey = process.env.REACT_APP_LOCALHOST_KEY || "chat-app-current-user";
+  
+  useEffect(() => {
+    console.log("Chat component: Checking if user is logged in");
+    if (!localStorage.getItem(storageKey)) {
+      console.log("Chat component: No user found in localStorage, redirecting to login");
       navigate("/login");
     } else {
-      setCurrentUser(
-        await JSON.parse(
-          localStorage.getItem(process.env.REACT_APP_LOCALHOST_KEY)
-        )
-      );
+      const user = JSON.parse(localStorage.getItem(storageKey));
+      console.log("Chat component: User found in localStorage:", user);
+      
+      // Check if user has avatar set
+      if (!user.isAvatarImageSet) {
+        console.log("Chat component: User has no avatar set, redirecting to avatar page");
+        navigate("/setAvatar");
+      } else {
+        setCurrentUser(user);
+      }
     }
   }, []);
+  
   useEffect(() => {
     if (currentUser) {
+      console.log("Chat component: Connecting socket for user:", currentUser._id);
       socket.current = io(host);
       socket.current.emit("add-user", currentUser._id);
     }
   }, [currentUser]);
 
-  useEffect(async () => {
-    if (currentUser) {
-      if (currentUser.isAvatarImageSet) {
-        const data = await axios.get(`${allUsersRoute}/${currentUser._id}`);
-        setContacts(data.data);
-      } else {
-        navigate("/setAvatar");
+  useEffect(() => {
+    const fetchContacts = async () => {
+      if (currentUser) {
+        if (currentUser.isAvatarImageSet) {
+          try {
+            console.log("Chat component: Fetching contacts for user:", currentUser._id);
+            const data = await axios.get(`${allUsersRoute}/${currentUser._id}`);
+            console.log("Chat component: Contacts fetched successfully:", data.data);
+            setContacts(data.data);
+          } catch (error) {
+            console.error("Chat component: Error fetching contacts:", error);
+          }
+        } else {
+          console.log("Chat component: Redirecting to avatar page");
+          navigate("/setAvatar");
+        }
       }
-    }
+    };
+    
+    fetchContacts();
   }, [currentUser]);
   const handleChatChange = (chat) => {
     setCurrentChat(chat);
   };
   return (
-    <>
-      <Container>
-        <div className="container">
-          <Contacts contacts={contacts} changeChat={handleChatChange} />
-          {currentChat === undefined ? (
-            <Welcome />
-          ) : (
-            <ChatContainer currentChat={currentChat} socket={socket} />
-          )}
+    <div className="min-h-screen bg-gradient-to-br from-primary-50 to-primary-100">
+      <div className="max-w-7xl mx-auto h-screen py-6 px-4 sm:px-6 lg:px-8">
+        <div className="bg-white rounded-xl shadow-lg h-[85vh] overflow-hidden">
+          <div className="grid grid-cols-4 h-full">
+            <div className="col-span-1 border-r border-gray-200">
+              <Contacts contacts={contacts} changeChat={handleChatChange} />
+            </div>
+            <div className="col-span-3">
+              {currentChat === undefined ? (
+                <Welcome />
+              ) : (
+                <ChatContainer currentChat={currentChat} socket={socket} />
+              )}
+            </div>
+          </div>
         </div>
-      </Container>
-    </>
+      </div>
+    </div>
   );
 }
-
-const Container = styled.div`
-  height: 100vh;
-  width: 100vw;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1rem;
-  align-items: center;
-  background-color: #131324;
-  .container {
-    height: 85vh;
-    width: 85vw;
-    background-color: #00000076;
-    display: grid;
-    grid-template-columns: 25% 75%;
-    @media screen and (min-width: 720px) and (max-width: 1080px) {
-      grid-template-columns: 35% 65%;
-    }
-  }
-`;

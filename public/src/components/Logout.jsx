@@ -1,9 +1,9 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { BiPowerOff } from "react-icons/bi";
-import styled from "styled-components";
 import axios from "axios";
 import { logoutRoute } from "../utils/APIRoutes";
+
 export default function Logout() {
   const navigate = useNavigate();
   const handleClick = async () => {
@@ -16,24 +16,14 @@ export default function Logout() {
       navigate("/login");
     }
   };
+  
   return (
-    <Button onClick={handleClick}>
-      <BiPowerOff />
-    </Button>
+    <button 
+      onClick={handleClick}
+      className="flex justify-center items-center p-2 rounded-lg bg-primary-600 hover:bg-primary-700 transition-colors text-white"
+      aria-label="Logout"
+    >
+      <BiPowerOff className="text-xl" />
+    </button>
   );
 }
-
-const Button = styled.button`
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 0.5rem;
-  border-radius: 0.5rem;
-  background-color: #9a86f3;
-  border: none;
-  cursor: pointer;
-  svg {
-    font-size: 1.3rem;
-    color: #ebe7ff;
-  }
-`;

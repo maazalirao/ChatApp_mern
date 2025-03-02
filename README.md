@@ -1,25 +1,21 @@
-# Snappy - Chat Application 
-Snappy is chat application build with the power of MERN Stack. You can find the tutorial [here](https://www.youtube.com/watch?v=otaQKODEUFs)
-
-
-![login page](./images/snappy_login.png)
-
-![home page](./images/snappy.png)
+# Mbot - Modern Chat Application 
+Mbot is a sleek chat application built with React, Node.js, and Tailwind CSS.
 
 ## Installation Guide
 
 ### Requirements
 - [Nodejs](https://nodejs.org/en/download)
-- [Mongodb](https://www.mongodb.com/docs/manual/administration/install-community/)
+- [MongoDB](https://www.mongodb.com/docs/manual/administration/install-community/)
 
-Both should be installed and make sure mongodb is running.
+Both should be installed and make sure MongoDB is running.
+
 ### Installation
 
-#### First Method
 ```shell
-git clone https://github.com/koolkishan/chat-app-react-nodejs
-cd chat-app-react-nodejs
+git clone https://github.com/yourusername/mbot
+cd mbot
 ```
+
 Now rename env files from .env.example to .env
 ```shell
 cd public
@@ -33,36 +29,35 @@ cd ..
 Now install the dependencies
 ```shell
 cd server
-yarn
+npm install
 cd ..
 cd public
-yarn
+npm install
 ```
+
 We are almost done, Now just start the development server.
 
 For Frontend.
 ```shell
 cd public
-yarn start
+npm start
 ```
+
 For Backend.
 
-Open another terminal in folder, Also make sure mongodb is running in background.
+Open another terminal in folder, Also make sure MongoDB is running in background.
 ```shell
 cd server
-yarn start
+npm start
 ```
+
 Done! Now open localhost:3000 in your browser.
 
-#### Second Method
-- This method requires docker and docker-compose to be installed in your system.
-- Make sure you are in the root of your project and run the following command.
+## Features
 
-```shell
-docker compose build --no-cache
-```
-after the build is complete run the containers using the following command
-```shell
-docker compose up
-```
-now open localhost:3000 in your browser.
+- Modern UI with Tailwind CSS
+- Real-time messaging with Socket.io
+- User authentication
+- Responsive design
+- Emoji picker
+- Clean and intuitive interface

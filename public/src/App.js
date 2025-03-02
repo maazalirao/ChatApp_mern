@@ -4,6 +4,8 @@ import SetAvatar from "./components/SetAvatar";
 import Chat from "./pages/Chat";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import TailwindTest from "./components/TailwindTest";
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -12,6 +14,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/setAvatar" element={<SetAvatar />} />
         <Route path="/" element={<Chat />} />
+        <Route path="/test" element={<TailwindTest />} />
       </Routes>
     </BrowserRouter>
   );

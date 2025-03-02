@@ -1,5 +1,5 @@
 {
-  "name": "chat-app",
+  "name": "mbot",
   "version": "0.1.0",
   "private": true,
   "dependencies": {
@@ -16,15 +16,16 @@
     "react-scripts": "5.0.0",
     "react-toastify": "^8.1.1",
     "socket.io-client": "^4.4.1",
-    "styled-components": "^5.3.3",
     "uuid": "^8.3.2",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
+    "start": "npm run build:css && react-scripts start",
+    "build": "npm run build:css && react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "build:tailwind": "tailwindcss -i ./tailwind.css -o ./src/tailwind-output.css --watch",
+    "build:css": "tailwindcss build -i ./tailwind.css -o ./src/tailwind-output.css"
   },
   "eslintConfig": {
     "extends": [
@@ -43,5 +44,10 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.1",
+    "postcss": "^8.4.35",
+    "autoprefixer": "^10.4.17"
   }
 }

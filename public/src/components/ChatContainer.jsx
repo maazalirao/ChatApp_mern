@@ -1,25 +1,27 @@
 import React, { useState, useEffect, useRef } from "react";
-import styled from "styled-components";
 import ChatInput from "./ChatInput";
-import Logout from "./Logout";
 import { v4 as uuidv4 } from "uuid";
 import axios from "axios";
 import { sendMessageRoute, recieveMessageRoute } from "../utils/APIRoutes";
+import Logout from "./Logout";
 
 export default function ChatContainer({ currentChat, socket }) {
   const [messages, setMessages] = useState([]);
   const scrollRef = useRef();
   const [arrivalMessage, setArrivalMessage] = useState(null);
 
-  useEffect(async () => {
-    const data = await JSON.parse(
-      localStorage.getItem(process.env.REACT_APP_LOCALHOST_KEY)
-    );
-    const response = await axios.post(recieveMessageRoute, {
-      from: data._id,
-      to: currentChat._id,
-    });
-    setMessages(response.data);
+  useEffect(() => {
+    const fetchData = async () => {
+      const data = await JSON.parse(
+        localStorage.getItem(process.env.REACT_APP_LOCALHOST_KEY)
+      );
+      const response = await axios.post(recieveMessageRoute, {
+        from: data._id,
+        to: currentChat._id,
+      });
+      setMessages(response.data);
+    };
+    fetchData();
   }, [currentChat]);
 
   useEffect(() => {
@@ -70,112 +72,48 @@ export default function ChatContainer({ currentChat, socket }) {
   }, [messages]);
 
   return (
-    <Container>
-      <div className="chat-header">
-        <div className="user-details">
-          <div className="avatar">
-            <img
-              src={`data:image/svg+xml;base64,${currentChat.avatarImage}`}
-              alt=""
-            />
+    <div className="h-full flex flex-col">
+      <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-primary-600 rounded-full flex items-center justify-center">
+            <span className="text-white font-medium">
+              {currentChat.username[0].toUpperCase()}
+            </span>
           </div>
-          <div className="username">
-            <h3>{currentChat.username}</h3>
-          </div>
+          <h3 className="text-lg font-semibold text-gray-900">
+            {currentChat.username}
+          </h3>
         </div>
         <Logout />
       </div>
-      <div className="chat-messages">
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((message) => {
           return (
-            <div ref={scrollRef} key={uuidv4()}>
+            <div
+              ref={scrollRef}
+              key={uuidv4()}
+              className={`flex ${
+                message.fromSelf ? "justify-end" : "justify-start"
+              }`}
+            >
               <div
-                className={`message ${
-                  message.fromSelf ? "sended" : "recieved"
+                className={`max-w-[70%] break-words p-3 rounded-lg ${
+                  message.fromSelf
+                    ? "bg-primary-600 text-white rounded-br-none"
+                    : "bg-gray-100 text-gray-900 rounded-bl-none"
                 }`}
               >
-                <div className="content ">
-                  <p>{message.message}</p>
-                </div>
+                <p>{message.message}</p>
               </div>
             </div>
           );
         })}
       </div>
-      <ChatInput handleSendMsg={handleSendMsg} />
-    </Container>
+
+      <div className="border-t border-gray-200 p-4">
+        <ChatInput handleSendMsg={handleSendMsg} />
+      </div>
+    </div>
   );
 }
-
-const Container = styled.div`
-  display: grid;
-  grid-template-rows: 10% 80% 10%;
-  gap: 0.1rem;
-  overflow: hidden;
-  @media screen and (min-width: 720px) and (max-width: 1080px) {
-    grid-template-rows: 15% 70% 15%;
-  }
-  .chat-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 2rem;
-    .user-details {
-      display: flex;
-      align-items: center;
-      gap: 1rem;
-      .avatar {
-        img {
-          height: 3rem;
-        }
-      }
-      .username {
-        h3 {
-          color: white;
-        }
-      }
-    }
-  }
-  .chat-messages {
-    padding: 1rem 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    overflow: auto;
-    &::-webkit-scrollbar {
-      width: 0.2rem;
-      &-thumb {
-        background-color: #ffffff39;
-        width: 0.1rem;
-        border-radius: 1rem;
-      }
-    }
-    .message {
-      display: flex;
-      align-items: center;
-      .content {
-        max-width: 40%;
-        overflow-wrap: break-word;
-        padding: 1rem;
-        font-size: 1.1rem;
-        border-radius: 1rem;
-        color: #d1d1d1;
-        @media screen and (min-width: 720px) and (max-width: 1080px) {
-          max-width: 70%;
-        }
-      }
-    }
-    .sended {
-      justify-content: flex-end;
-      .content {
-        background-color: #4f04ff21;
-      }
-    }
-    .recieved {
-      justify-content: flex-start;
-      .content {
-        background-color: #9900ff20;
-      }
-    }
-  }
-`;
