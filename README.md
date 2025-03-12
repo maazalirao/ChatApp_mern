@@ -1,63 +1,12 @@
-# Mbot - Modern Chat Application 
-Mbot is a sleek chat application built with React, Node.js, and Tailwind CSS.
+# React + Vite
 
-## Installation Guide
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-### Requirements
-- [Nodejs](https://nodejs.org/en/download)
-- [MongoDB](https://www.mongodb.com/docs/manual/administration/install-community/)
+Currently, two official plugins are available:
 
-Both should be installed and make sure MongoDB is running.
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-### Installation
+## Expanding the ESLint configuration
 
-```shell
-git clone https://github.com/yourusername/mbot
-cd mbot
-```
-
-Now rename env files from .env.example to .env
-```shell
-cd public
-mv .env.example .env
-cd ..
-cd server
-mv .env.example .env
-cd ..
-```
-
-Now install the dependencies
-```shell
-cd server
-npm install
-cd ..
-cd public
-npm install
-```
-
-We are almost done, Now just start the development server.
-
-For Frontend.
-```shell
-cd public
-npm start
-```
-
-For Backend.
-
-Open another terminal in folder, Also make sure MongoDB is running in background.
-```shell
-cd server
-npm start
-```
-
-Done! Now open localhost:3000 in your browser.
-
-## Features
-
-- Modern UI with Tailwind CSS
-- Real-time messaging with Socket.io
-- User authentication
-- Responsive design
-- Emoji picker
-- Clean and intuitive interface
+If you are developing a production application, we recommend using TypeScript and enable type-aware lint rules. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
