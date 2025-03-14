@@ -1,92 +1,70 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
+/* CSS variables that will be used alongside Tailwind */
 :root {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --primary: #4a76fd;
+  --primary-dark: #3a66dd;
+  --secondary: #6c5ce7;
+  --accent: #00d2d3;
+  --success: #00b894;
+  --warning: #fdcb6e;
+  --danger: #ff7675;
+  --light-bg: #f5f8ff;
+  --dark-bg: #1a2236;
+  --card-bg: #ffffff;
+  --dark-card-bg: #283347;
+  --text-primary: #2d3748;
+  --text-secondary: #4a5568;
+  --text-tertiary: #718096;
+  --border-color: #e2e8f0;
+  --app-height: 100%;
+  
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  --app-height: 100%;
 }
 
-html, body {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
-
-body {
-  background-color: #f9fafb;
-}
-
-#root {
-  height: 100%;
-  width: 100%;
-}
-
-.app-container {
-  height: 100%;
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #f0f4ff 0%, #e6f7ff 100%);
-}
-
-@media (max-width: 768px) {
-  .app-container {
-    padding: 0;
+@layer base {
+  html, body, #root {
+    @apply h-full w-full;
   }
   
-  .chat-app {
-    border-radius: 0;
-    box-shadow: none;
+  body {
+    @apply font-['Inter',-apple-system,BlinkMacSystemFont,'Segoe_UI',Roboto,Helvetica,Arial,sans-serif] bg-gray-50 overflow-hidden;
   }
 }
 
-/* Adding a chat date separator styling that wasn't in the ChatStyles.css */
-.chat-date-separator {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 1rem 0;
-  color: var(--text-tertiary);
-  font-size: 0.75rem;
-}
+/* These styles now leverage Tailwind using @apply */
+@layer components {
+  .chat-date-separator {
+    @apply flex items-center justify-center my-4 text-gray-500 text-xs;
+  }
 
-.chat-date-separator span {
-  background-color: var(--light-bg);
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
-}
+  .chat-date-separator span {
+    @apply bg-blue-50 px-3 py-1 rounded-full;
+  }
 
-.message-sender {
-  font-size: 0.75rem;
-  color: var(--text-tertiary);
-  margin-bottom: 0.25rem;
-  margin-left: 0.5rem;
-}
+  .message-sender {
+    @apply text-xs text-gray-500 mb-1 ml-2;
+  }
 
-.message-meta {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-}
-
-/* Media query helper class */
-.md-only {
-  display: none;
-}
-
-@media (max-width: 768px) {
+  .message-meta {
+    @apply flex items-center gap-2 mt-1;
+  }
+  
+  /* Responsive helper for mobile */
   .md-only {
-    display: flex;
+    @apply hidden;
+  }
+  
+  @media (max-width: 768px) {
+    .md-only {
+      @apply flex;
+    }
+    
+    .chat-app {
+      @apply rounded-none shadow-none;
+    }
   }
 }
