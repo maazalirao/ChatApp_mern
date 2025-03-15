@@ -14,8 +14,8 @@ export const SocketProvider = ({ children }) => {
   const [users, setUsers] = useState([]);
   const [rooms, setRooms] = useState([]);
   const [activeRoom, setActiveRoom] = useState(null);
-  const [messages, setMessages] = useState({});
-  const [typingUsers, setTypingUsers] = useState({});
+  const [messages, setMessages] = useState([]);
+  const [typingUsers, setTypingUsers] = useState([]);
   const [connectionError, setConnectionError] = useState(null);
   
   const { currentUser, isAuthenticated } = useAuth();
@@ -79,27 +79,35 @@ export const SocketProvider = ({ children }) => {
 
       // Handle receiving messages
       socketInstance.on('receive_message', (newMessage) => {
-        console.log('Received new message:', newMessage);
+        console.log('Received message:', newMessage);
         
         // Ensure we have the roomId for organization
-        if (!newMessage.roomId && activeRoom) {
-          newMessage.roomId = activeRoom;
+        if (!newMessage.roomId) {
+          console.error('Received message without roomId:', newMessage);
+          return;
         }
         
+        // Make sure the message has the expected structure
+        if (!newMessage.text && newMessage.message) {
+          newMessage.text = newMessage.message;
+        }
+        
+        // Make sure userId is available
+        if (!newMessage.userId && newMessage.sender) {
+          newMessage.userId = newMessage.sender.id;
+        }
+        
+        // Check if we already have this message in our state (avoid duplicates)
         setMessages(prev => {
-          // Get current messages for this room, or empty array if none
-          const roomMessages = prev[newMessage.roomId] || [];
-          
-          // Avoid duplicate messages (check by id)
-          if (roomMessages.some(msg => msg.id === newMessage.id)) {
+          // Check if message already exists in our state
+          const exists = prev.some(m => m.id === newMessage.id);
+          if (exists) {
+            console.log(`Message ${newMessage.id} already exists in state, skipping`);
             return prev;
           }
           
-          // Return updated messages with new message added to the room
-          return {
-            ...prev,
-            [newMessage.roomId]: [...roomMessages, newMessage]
-          };
+          // Add the new message to our state
+          return [...prev, newMessage];
         });
       });
 
@@ -120,38 +128,38 @@ export const SocketProvider = ({ children }) => {
         
         setTypingUsers(prev => {
           if (isTyping) {
-            // Ensure no duplicates
-            const currentTypers = prev[roomId] || [];
-            if (currentTypers.some(u => u.id === user.id)) {
-              return prev;
+            // Add user to typing users if not already there
+            const exists = prev.some(u => u.userId === user.id && u.roomId === roomId);
+            if (!exists) {
+              return [...prev, { ...user, roomId }];
             }
-            return { ...prev, [roomId]: [...currentTypers, user] };
+            return prev;
           } else {
-            return { 
-              ...prev, 
-              [roomId]: (prev[roomId] || []).filter(u => u.id !== user.id)
-            };
+            // Remove user from typing users
+            return prev.filter(u => !(u.userId === user.id && u.roomId === roomId));
           }
         });
       });
 
       // Handle message history when joining a room
-      socketInstance.on('message_history', ({ roomId, messages }) => {
-        console.log(`Received message history for room ${roomId}: ${messages.length} messages`);
+      socketInstance.on('message_history', ({ roomId, messages: historyMessages }) => {
+        console.log(`Received message history for room ${roomId}: ${historyMessages.length} messages`);
         
-        if (!roomId || !messages || !messages.length) return;
+        if (!roomId || !historyMessages || !historyMessages.length) return;
+        
+        // Map messages to ensure they have the correct structure
+        const formattedMessages = historyMessages.map(msg => ({
+          ...msg,
+          roomId,
+          text: msg.text || msg.message,
+          userId: msg.userId || (msg.sender ? msg.sender.id : null)
+        }));
         
         // Update messages state with history
         setMessages(prev => {
-          // Skip if we already have messages for this room (avoid duplicates)
-          if (prev[roomId] && prev[roomId].length > 0) {
-            return prev;
-          }
-          
-          return {
-            ...prev,
-            [roomId]: messages
-          };
+          // Filter out any messages for this room that might already exist
+          const otherMessages = prev.filter(m => m.roomId !== roomId);
+          return [...otherMessages, ...formattedMessages];
         });
       });
 
@@ -214,7 +222,9 @@ export const SocketProvider = ({ children }) => {
     const messageData = {
       id: messageId,
       roomId,
-      message,
+      text: message,
+      userId: currentUser.id,
+      username: currentUser.username,
       timestamp
     };
     
@@ -226,21 +236,16 @@ export const SocketProvider = ({ children }) => {
       roomId,
       text: message,
       timestamp,
-      sender: {
-        id: socket.id,
+      userId: currentUser.id,
+      user: {
+        id: currentUser.id,
         username: currentUser.username,
         avatar: currentUser.avatar
       }
     };
     
     // Add to local messages immediately (optimistic update)
-    setMessages(prev => {
-      const roomMessages = prev[roomId] || [];
-      return {
-        ...prev,
-        [roomId]: [...roomMessages, newMessage]
-      };
-    });
+    setMessages(prev => [...prev, newMessage]);
     
     // Then send to server
     socket.emit('send_message', messageData);

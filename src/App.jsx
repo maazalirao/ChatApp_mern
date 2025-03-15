@@ -108,7 +108,9 @@ function App() {
               <Route path="/register" element={<Register />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/chat/:roomId" element={<ChatRoom />} />
-              <Route path="/" element={<Navigate to="/login" />} />
+              <Route path="/" element={
+                <Navigate to="/dashboard" />
+              } />
             </Routes>
             
             {process.env.NODE_ENV === 'development' && (

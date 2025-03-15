@@ -91,17 +91,18 @@ io.on('connection', (socket) => {
 
   // Handle chat messages
   socket.on('send_message', (messageData) => {
-    const { roomId, message, timestamp, id } = messageData;
+    const { roomId, message, text, timestamp, id } = messageData;
     
     console.log(`Received message for room ${roomId}:`, messageData);
     
     if (rooms[roomId]) {
       const newMessage = {
         id: id || Date.now().toString(),
-        sender: users[socket.id],
-        text: message,
+        userId: socket.id,
+        user: users[socket.id],
+        text: text || message,
         timestamp: timestamp || new Date().toISOString(),
-        roomId: roomId // Ensure roomId is included in the message
+        roomId: roomId
       };
       
       // Add message to room history

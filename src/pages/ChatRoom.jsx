@@ -66,8 +66,24 @@ const ChatRoom = () => {
   
   // Set roomMessages whenever messages change
   useEffect(() => {
+    // Filter messages for this room and deduplicate by ID
     const roomMsgs = messages.filter(msg => msg.roomId === roomId);
-    setRoomMessages(roomMsgs);
+    
+    // Deduplicate messages by ID (keep the most recent version of each message)
+    const uniqueMessages = [];
+    const messageIds = new Set();
+    
+    // Process in reverse to get newest version of duplicates
+    for (let i = roomMsgs.length - 1; i >= 0; i--) {
+      const msg = roomMsgs[i];
+      if (!messageIds.has(msg.id)) {
+        messageIds.add(msg.id);
+        uniqueMessages.unshift(msg); // Add to front to maintain order
+      }
+    }
+    
+    console.log(`Setting ${uniqueMessages.length} room messages (filtered from ${roomMsgs.length})`);
+    setRoomMessages(uniqueMessages);
   }, [messages, roomId]);
   
   // Auto-scroll to bottom when new messages arrive
@@ -131,17 +147,23 @@ const ChatRoom = () => {
     // Don't send empty messages
     if (message.trim() === '') return;
     
-    // Send message
-    sendMessage(roomId, message);
-    
-    // Clear input
-    setMessage('');
-    
-    // Clear typing status
-    sendTypingStatus(roomId, false);
-    
-    // Focus the input field
-    messageInputRef.current?.focus();
+    try {
+      console.log(`Sending message to room ${roomId}: "${message}"`);
+      // Send message
+      sendMessage(roomId, message.trim());
+      
+      // Clear input
+      setMessage('');
+      
+      // Clear typing status
+      sendTypingStatus(roomId, false);
+      
+      // Focus the input field
+      messageInputRef.current?.focus();
+    } catch (error) {
+      console.error('Error sending message:', error);
+      // You could add error handling here
+    }
   };
   
   // Handle leaving the room
