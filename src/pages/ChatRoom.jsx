@@ -336,7 +336,16 @@ const ChatRoom = () => {
         ) : (
           <div className="space-y-4">
             {roomMessages.map((msg, index) => {
-              const isCurrentUser = msg.userId === currentUser.id;
+              // Check if message is from current user - use multiple checks for reliability
+              const isCurrentUser = 
+                // Check by userId
+                msg.userId === currentUser.id ||
+                // Check by the sender object
+                (msg.user?.id === currentUser.id) ||
+                // Check by username as fallback
+                (msg.username === currentUser.username) ||
+                (msg.user?.username === currentUser.username);
+              
               return (
                 <motion.div
                   key={msg.id || index}

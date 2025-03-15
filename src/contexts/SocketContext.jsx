@@ -97,6 +97,21 @@ export const SocketProvider = ({ children }) => {
           newMessage.userId = newMessage.sender.id;
         }
         
+        // Check if message is from current user - update message accordingly
+        if (newMessage.username === currentUser.username || 
+            newMessage.user?.username === currentUser.username) {
+          // This is our own message, make sure it has the correct userId
+          newMessage.userId = currentUser.id;
+          // Make sure the user object is correct
+          if (!newMessage.user) {
+            newMessage.user = {
+              id: currentUser.id,
+              username: currentUser.username,
+              avatar: currentUser.avatar
+            };
+          }
+        }
+        
         // Check if we already have this message in our state (avoid duplicates)
         setMessages(prev => {
           // Check if message already exists in our state
