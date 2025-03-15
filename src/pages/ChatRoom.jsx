@@ -9,7 +9,10 @@ import {
   FiUsers, 
   FiLogOut, 
   FiInfo,
-  FiMessageCircle
+  FiMessageCircle,
+  FiX,
+  FiChevronDown,
+  FiSmile
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -48,270 +51,248 @@ const ChatRoom = () => {
       return;
     }
     
-    // Set room info
-    const room = rooms.find(r => r.id === roomId);
-    if (room) {
-      setRoomInfo(room);
-    }
-  }, [currentUser, roomId, rooms, navigate]);
-  
-  // Set active room and update messages when roomId changes
-  useEffect(() => {
-    if (messages[roomId]) {
-      console.log(`Loading ${messages[roomId].length} messages for room ${roomId}`);
-      setRoomMessages(messages[roomId]);
-    } else {
-      console.log(`No messages found for room ${roomId}`);
-      setRoomMessages([]);
-    }
-  }, [roomId, messages]);
-  
-  // Listen for user join/leave events and add system messages
-  useEffect(() => {
-    if (!socket) return;
+    // Listen for room info updates
+    socket?.on('roomInfo', (data) => {
+      if (data.roomId === roomId) {
+        setRoomInfo(data);
+      }
+    });
     
-    const handleUserJoined = (data) => {
-      if (data.room.id !== roomId) return;
-      
-      // Don't show message for the current user
-      if (data.user.id === socket.id) return;
-      
-      // Add system message
-      const systemMessage = {
-        id: `system_${Date.now()}`,
-        isSystem: true,
-        text: data.message,
-        timestamp: new Date().toISOString()
-      };
-      
-      setRoomMessages(prev => [...prev, systemMessage]);
-    };
-    
-    const handleUserLeft = (data) => {
-      if (data.room.id !== roomId) return;
-      
-      // Add system message
-      const systemMessage = {
-        id: `system_${Date.now()}`,
-        isSystem: true,
-        text: data.message,
-        timestamp: new Date().toISOString()
-      };
-      
-      setRoomMessages(prev => [...prev, systemMessage]);
-    };
-    
-    socket.on('user_joined_room', handleUserJoined);
-    socket.on('user_left_room', handleUserLeft);
-    
+    // Cleanup on unmount
     return () => {
-      socket.off('user_joined_room', handleUserJoined);
-      socket.off('user_left_room', handleUserLeft);
+      socket?.off('roomInfo');
     };
-  }, [socket, roomId]);
+  }, [currentUser, navigate, roomId, socket]);
   
-  // Scroll to bottom when messages change
+  // Set roomMessages whenever messages change
+  useEffect(() => {
+    const roomMsgs = messages.filter(msg => msg.roomId === roomId);
+    setRoomMessages(roomMsgs);
+  }, [messages, roomId]);
+  
+  // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [roomMessages]);
   
-  // Automatically focus the message input
+  // Get current room information
   useEffect(() => {
-    messageInputRef.current?.focus();
-  }, [roomId]);
+    const room = rooms.find(r => r.id === roomId);
+    if (room) {
+      setRoomInfo(room);
+    }
+  }, [roomId, rooms]);
   
-  // Handle typing status
+  // Handle a user joining the room
+  const handleUserJoined = (data) => {
+    // Add notification for user joining
+  };
+  
+  // Handle a user leaving the room
+  const handleUserLeft = (data) => {
+    // Add notification for user leaving
+  };
+  
+  // Close the dropdowns when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showMenu || showUsersList) {
+        // Close dropdowns when clicking outside
+        setShowMenu(false);
+        setShowUsersList(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showMenu, showUsersList]);
+  
+  // Handle typing indicator
   const handleTyping = () => {
-    if (!isTyping) {
-      setIsTyping(true);
-      sendTypingStatus(roomId, true);
-    }
+    clearTimeout(typingTimeout);
     
-    // Clear previous timeout
-    if (typingTimeout) {
-      clearTimeout(typingTimeout);
-    }
+    // Send typing status
+    sendTypingStatus(roomId, true);
     
-    // Set a new timeout
+    // Set timeout to clear typing status after 2 seconds of inactivity
     const timeout = setTimeout(() => {
-      setIsTyping(false);
       sendTypingStatus(roomId, false);
     }, 2000);
     
     setTypingTimeout(timeout);
   };
   
+  // Handle sending a message
   const handleSendMessage = (e) => {
     e.preventDefault();
     
-    if (!message.trim()) return;
+    // Don't send empty messages
+    if (message.trim() === '') return;
     
-    console.log(`Sending message to room ${roomId}: "${message.trim()}"`);
+    // Send message
+    sendMessage(roomId, message);
     
-    try {
-      sendMessage(roomId, message.trim());
-      setMessage('');
-      
-      // Clear typing status
-      setIsTyping(false);
-      sendTypingStatus(roomId, false);
-      
-      // Focus back to input
-      messageInputRef.current?.focus();
-    } catch (error) {
-      console.error('Error sending message:', error);
-      // You could add an error state and show it to the user
-    }
+    // Clear input
+    setMessage('');
+    
+    // Clear typing status
+    sendTypingStatus(roomId, false);
+    
+    // Focus the input field
+    messageInputRef.current?.focus();
   };
   
+  // Handle leaving the room
   const handleLeaveRoom = () => {
     leaveRoom(roomId);
-    navigate('/dashboard');
+    navigate('/');
   };
 
-  // Get who's typing
-  const whoIsTyping = typingUsers[roomId]?.filter(user => user.id !== currentUser?.id) || [];
-
-  if (!currentUser) {
-    return null;
-  }
-
+  // Animation variants
+  const messageVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
+  };
+  
   return (
-    <div className="min-h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
+    <div className="chat-container">
       {/* Chat header */}
-      <header className="bg-white dark:bg-gray-800 shadow-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex justify-between items-center">
-          <div className="flex items-center">
-            <Link to="/dashboard" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white mr-4">
-              <FiArrowLeft size={20} />
-            </Link>
-            
-            <div className="flex items-center">
-              <FiMessageCircle className="text-blue-500 h-6 w-6 mr-2" />
-              <h1 className="font-bold text-gray-900 dark:text-white">
-                {roomInfo?.name || `Room ${roomId.split('_')[1]}`}
-              </h1>
-            </div>
-          </div>
+      <div className="chat-header">
+        <div className="flex items-center">
+          <button 
+            onClick={() => navigate('/')}
+            className="btn-icon mr-2"
+            aria-label="Back to dashboard"
+          >
+            <FiArrowLeft />
+          </button>
           
           <div className="flex items-center">
+            <div className="relative">
+              <div className="h-10 w-10 bg-primary-100 dark:bg-primary-900 rounded-full flex items-center justify-center text-primary-600 dark:text-primary-300 mr-3">
+                <FiMessageCircle size={20} />
+              </div>
+              <span className="absolute bottom-0 right-2 h-3 w-3 bg-green-500 rounded-full border-2 border-white dark:border-gray-800"></span>
+            </div>
+            
+            <div>
+              <h2 className="font-bold">{roomInfo?.name || 'Chat Room'}</h2>
+              <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                <span>{roomInfo?.users?.length || 0} online</span>
+                {typingUsers.filter(u => u.roomId === roomId).length > 0 && (
+                  <span className="ml-2 animate-pulse text-gray-400">• Someone is typing...</span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex items-center">
+          <button 
+            className="btn-icon mr-1"
+            onClick={() => setShowUsersList(!showUsersList)}
+            aria-label="Show users"
+          >
+            <FiUsers />
+          </button>
+          
+          <div className="relative">
             <button 
-              onClick={() => setShowUsersList(true)} 
-              className="btn-secondary flex items-center text-xs mr-2"
+              className="btn-icon"
+              onClick={() => setShowMenu(!showMenu)}
+              aria-label="More options"
             >
-              <FiUsers className="mr-1" />
-              <span className="hidden sm:inline">Users</span>
-              <span className="inline sm:hidden ml-1">({roomInfo?.users?.length || 0})</span>
+              <FiMoreVertical />
             </button>
             
-            <div className="relative">
-              <button
-                onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
-              >
-                <FiMoreVertical />
-              </button>
-              
+            {/* Dropdown menu */}
+            <AnimatePresence>
               {showMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10">
+                <motion.div 
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700"
+                >
                   <div className="py-1">
                     <button
+                      className="flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                       onClick={() => {
                         setShowMenu(false);
                         setShowUsersList(true);
                       }}
-                      className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                     >
-                      <FiUsers className="inline mr-2" />
-                      Show Users
+                      <FiUsers className="mr-2" />
+                      View Participants
                     </button>
                     <button
-                      onClick={handleLeaveRoom}
-                      className="block w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      className="flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => {
+                        setShowMenu(false);
+                        // Show room info or other actions
+                      }}
                     >
-                      <FiLogOut className="inline mr-2" />
+                      <FiInfo className="mr-2" />
+                      Room Info
+                    </button>
+                    <button
+                      className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                      onClick={handleLeaveRoom}
+                    >
+                      <FiLogOut className="mr-2" />
                       Leave Room
                     </button>
                   </div>
-                </div>
+                </motion.div>
               )}
-            </div>
+            </AnimatePresence>
           </div>
         </div>
-      </header>
+      </div>
       
-      {/* Users list sidebar */}
+      {/* Users sidebar */}
       <AnimatePresence>
         {showUsersList && (
           <motion.div
-            initial={{ opacity: 0, x: '100%' }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: '100%' }}
-            transition={{ type: 'spring', damping: 20 }}
-            className="fixed inset-0 z-50 flex"
+            initial={{ width: 0, opacity: 0 }}
+            animate={{ width: 250, opacity: 1 }}
+            exit={{ width: 0, opacity: 0 }}
+            className="fixed inset-y-0 right-0 bg-white dark:bg-gray-800 shadow-lg z-30 overflow-hidden"
           >
-            <div 
-              className="absolute inset-0 bg-black bg-opacity-50"
-              onClick={() => setShowUsersList(false)}  
-            ></div>
+            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+              <h3 className="font-bold">Room Participants</h3>
+              <button 
+                onClick={() => setShowUsersList(false)}
+                className="btn-icon"
+                aria-label="Close users list"
+              >
+                <FiX />
+              </button>
+            </div>
             
-            <div className="relative ml-auto w-80 h-full bg-white dark:bg-gray-800 shadow-xl">
-              <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-                <h2 className="font-bold text-lg text-gray-900 dark:text-white">Room Users</h2>
-                <button
-                  onClick={() => setShowUsersList(false)}
-                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                >
-                  <FiArrowLeft />
-                </button>
-              </div>
-              
-              <div className="p-4">
-                <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
-                  <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 flex items-center">
-                    <FiInfo className="mr-2" />
-                    Room Information
-                  </h3>
-                  <p className="mt-2 text-sm text-blue-700 dark:text-blue-400">
-                    {roomInfo?.name || `Room ${roomId.split('_')[1]}`}
-                  </p>
-                  <p className="mt-1 text-xs text-blue-600 dark:text-blue-500">
-                    {roomInfo?.users?.length || 0} users active
-                  </p>
-                </div>
-                
-                <h3 className="text-xs font-medium uppercase text-gray-500 dark:text-gray-400 mb-2">
-                  Active Users
-                </h3>
-                
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {roomInfo?.users?.map((roomUser) => {
-                    const user = users.find(u => u.id === roomUser.id);
-                    if (!user) return null;
-                    
-                    return (
-                      <li key={user.id} className="py-3 flex items-center">
-                        <img
-                          src={user.avatar}
-                          alt={user.username}
-                          className="h-8 w-8 rounded-full mr-3"
-                        />
-                        <div>
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            {user.username}
-                            {user.id === currentUser.id && (
-                              <span className="ml-2 text-xs text-blue-500">(You)</span>
-                            )}
-                          </p>
-                          <div className="flex items-center">
-                            <div className="h-2 w-2 rounded-full bg-green-500 mr-2"></div>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">Online</p>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+            <div className="p-4 overflow-y-auto custom-scrollbar max-h-[calc(100vh-60px)]">
+              <div className="space-y-4">
+                {roomInfo?.users?.map((user) => (
+                  <div 
+                    key={user.id} 
+                    className="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    <img
+                      src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                      alt={user.username}
+                      className="avatar mr-3"
+                    />
+                    <div>
+                      <div className="font-medium">{user.username}</div>
+                      <div className="text-xs flex items-center text-green-500">
+                        <span className="h-2 w-2 rounded-full bg-green-500 mr-1"></span>
+                        Online
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </motion.div>
@@ -319,106 +300,123 @@ const ChatRoom = () => {
       </AnimatePresence>
       
       {/* Chat messages */}
-      <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-        <div className="max-w-3xl mx-auto space-y-4">
-          {roomMessages.length > 0 ? (
-            roomMessages.map((msg) => {
-              // Handle system messages differently
-              if (msg.isSystem) {
-                return (
-                  <motion.div
-                    key={msg.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex justify-center"
-                  >
-                    <div className="text-center py-2 px-4 bg-gray-200 dark:bg-gray-700 rounded-full text-xs text-gray-600 dark:text-gray-300 max-w-xs">
-                      {msg.text}
-                    </div>
-                  </motion.div>
-                );
-              }
-              
-              const isSelf = msg.sender?.id === currentUser.id || msg.sender?.id === socket?.id;
-              
+      <div className="chat-messages">
+        {roomMessages.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 text-center">
+            <div className="h-20 w-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
+              <FiMessageCircle size={40} />
+            </div>
+            <h3 className="text-xl font-medium mb-2">No messages yet</h3>
+            <p className="max-w-md text-gray-500 dark:text-gray-400">
+              Be the first to start the conversation in this room! Send a message below to get started.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {roomMessages.map((msg, index) => {
+              const isCurrentUser = msg.userId === currentUser.id;
               return (
                 <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className={`flex ${isSelf ? 'justify-end' : 'justify-start'}`}
+                  key={msg.id || index}
+                  variants={messageVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                 >
-                  {!isSelf && (
+                  {!isCurrentUser && (
                     <img
-                      src={msg.sender?.avatar}
-                      alt={msg.sender?.username}
+                      src={msg.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.user?.username || 'User')}&background=random`}
+                      alt={msg.user?.username || 'User'}
                       className="h-8 w-8 rounded-full mr-2 self-end"
                     />
                   )}
                   
-                  <div className={`max-w-xs sm:max-w-md`}>
-                    {!isSelf && (
-                      <div className="text-xs text-gray-600 dark:text-gray-400 ml-1 mb-1">
-                        {msg.sender?.username}
+                  <div className="max-w-xs space-y-1">
+                    {!isCurrentUser && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 ml-1">
+                        {msg.user?.username || 'User'}
                       </div>
                     )}
                     
-                    <div className={isSelf ? 'message-bubble-sent' : 'message-bubble-received'}>
-                      <p>{msg.text}</p>
-                      <div className="text-xs opacity-70 text-right mt-1">
-                        {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
-                      </div>
+                    <div className={isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'}>
+                      {msg.text}
+                    </div>
+                    
+                    <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
+                      {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
                     </div>
                   </div>
+                  
+                  {isCurrentUser && (
+                    <img
+                      src={currentUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.username)}&background=random`}
+                      alt={currentUser.username}
+                      className="h-8 w-8 rounded-full ml-2 self-end"
+                    />
+                  )}
                 </motion.div>
               );
-            })
-          ) : (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <p className="mb-2">No messages yet.</p>
-              <p>Send the first message to start the conversation!</p>
-            </div>
-          )}
-          
-          {/* Who's typing indicator */}
-          {whoIsTyping.length > 0 && (
-            <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm">
-              <div className="flex space-x-1 mr-2">
-                <div className="animate-bounce">•</div>
-                <div className="animate-bounce" style={{ animationDelay: '0.2s' }}>•</div>
-                <div className="animate-bounce" style={{ animationDelay: '0.4s' }}>•</div>
-              </div>
-              {whoIsTyping.length === 1 
-                ? `${whoIsTyping[0].username} is typing...` 
-                : `${whoIsTyping.length} people are typing...`}
-            </div>
-          )}
-          
-          <div ref={messagesEndRef} />
-        </div>
+            })}
+            
+            {/* Typing indicator */}
+            <AnimatePresence>
+              {typingUsers.filter(u => u.roomId === roomId).length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center space-x-2 text-gray-500 dark:text-gray-400"
+                >
+                  <div className="flex space-x-1">
+                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                  </div>
+                  <span className="text-sm italic">
+                    {typingUsers
+                      .filter(u => u.roomId === roomId)
+                      .map(u => u.username)
+                      .join(', ')} is typing...
+                  </span>
+                </motion.div>
+              )}
+            </AnimatePresence>
+            
+            {/* Auto-scroll anchor */}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
       </div>
       
       {/* Chat input */}
-      <div className="bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 p-4">
-        <form 
-          onSubmit={handleSendMessage}
-          className="max-w-3xl mx-auto flex items-center"
-        >
+      <div className="chat-input-container">
+        <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+          <button
+            type="button"
+            className="btn-icon text-gray-500 dark:text-gray-400"
+            aria-label="Add emoji"
+          >
+            <FiSmile />
+          </button>
+          
           <input
             type="text"
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            onKeyUp={handleTyping}
+            onKeyDown={() => handleTyping()}
             ref={messageInputRef}
             placeholder="Type a message..."
-            className="input-field flex-1 mr-2"
+            className="input-field flex-1"
+            autoFocus
           />
+          
           <button
             type="submit"
+            className="btn-primary p-2 rounded-full flex items-center justify-center"
             disabled={!message.trim()}
-            className={`btn-primary p-3 rounded-full ${!message.trim() && 'opacity-50 cursor-not-allowed'}`}
+            aria-label="Send message"
           >
-            <FiSend />
+            <FiSend size={18} />
           </button>
         </form>
       </div>
