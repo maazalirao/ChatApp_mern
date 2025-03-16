@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 3001;
 // Socket.io setup
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173", "https://*.vercel.app"],
     methods: ["GET", "POST"]
   }
 });
