@@ -28,11 +28,19 @@ export const SocketProvider = ({ children }) => {
     
     // Using a try-catch to handle any connection errors
     try {
-      const socketInstance = io('http://localhost:3001', {
+      // Use the current environment's server URL instead of hardcoded localhost
+      const serverUrl = import.meta.env.PROD 
+        ? window.location.origin  // In production, use the same origin
+        : 'http://localhost:3001'; // In development, use localhost
+      
+      console.log('Connecting to server URL:', serverUrl);
+      
+      const socketInstance = io(serverUrl, {
         transports: ['websocket', 'polling'], // Try WebSocket first, then fall back to polling
         reconnectionAttempts: 5,
         reconnectionDelay: 1000,
-        timeout: 10000 // Increase timeout
+        timeout: 10000, // Increase timeout
+        path: import.meta.env.PROD ? '/socket.io/' : undefined
       });
       
       setSocket(socketInstance);
