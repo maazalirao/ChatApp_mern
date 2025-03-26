@@ -1,3 +1,17 @@
+:root {
+  --color-primary-50: 239, 246, 255;
+  --color-primary-100: 219, 234, 254;
+  --color-primary-200: 191, 219, 254;
+  --color-primary-300: 147, 197, 253;
+  --color-primary-400: 96, 165, 250;
+  --color-primary-500: 59, 130, 246;
+  --color-primary-600: 37, 99, 235;
+  --color-primary-700: 29, 78, 216;
+  --color-primary-800: 30, 64, 175;
+  --color-primary-900: 30, 58, 138;
+  --color-primary-950: 23, 37, 84;
+}
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -135,33 +149,202 @@
   
   /* Animations */
   .animate-fade-in {
-    animation: fadeIn 0.3s ease-in-out;
+    animation: fade-in 0.5s ease-out;
   }
   
   .animate-slide-up {
-    animation: slideUp 0.3s ease-in-out;
+    animation: slide-up 0.5s ease-out;
   }
   
   .animate-slide-down {
     animation: slideDown 0.3s ease-in-out;
   }
   
-  .animate-pulse-slow {
+  .animate-pulse {
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
   }
   
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
   
-  @keyframes slideUp {
-    from { transform: translateY(10px); opacity: 0; }
-    to { transform: translateY(0); opacity: 1; }
+  @keyframes slide-up {
+    from {
+      transform: translateY(20px);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
   }
   
   @keyframes slideDown {
     from { transform: translateY(-10px); opacity: 0; }
     to { transform: translateY(0); opacity: 1; }
   }
+  
+  @keyframes pulse {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+}
+
+/* Background patterns */
+.bg-pattern {
+  position: relative;
+}
+
+.bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.dark .bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 1px, transparent 1px);
+}
+
+/* Avatar styling */
+.avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+/* Badge styling */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.badge-primary {
+  background-color: rgba(var(--color-primary-500), 0.1);
+  color: rgb(var(--color-primary-700));
+}
+
+.dark .badge-primary {
+  background-color: rgba(var(--color-primary-500), 0.2);
+  color: rgb(var(--color-primary-300));
+}
+
+.badge-success {
+  background-color: rgba(16, 185, 129, 0.1);
+  color: rgb(4, 120, 87);
+}
+
+.dark .badge-success {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: rgb(110, 231, 183);
+}
+
+/* Button styling */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: rgb(var(--color-primary-500));
+  color: white;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+  background-color: rgb(var(--color-primary-600));
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background-color: rgb(229, 231, 235);
+  color: rgb(55, 65, 81);
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: all 0.3s ease;
+}
+
+.dark .btn-secondary {
+  background-color: rgb(75, 85, 99);
+  color: rgb(243, 244, 246);
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  transition: all 0.3s ease;
+}
+
+.btn-icon:hover {
+  background-color: rgb(229, 231, 235);
+}
+
+.dark .btn-icon:hover {
+  background-color: rgb(55, 65, 81);
+}
+
+/* Card styling */
+.card {
+  background-color: white;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(229, 231, 235);
+  overflow: hidden;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.dark .card {
+  background-color: rgb(31, 41, 55);
+  border-color: rgb(55, 65, 81);
+}
+
+/* Input field styling */
+.input-field {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgb(209, 213, 219);
+  border-radius: 0.375rem;
+  background-color: white;
+  color: rgb(17, 24, 39);
+  transition: all 0.3s ease;
+}
+
+.dark .input-field {
+  background-color: rgb(31, 41, 55);
+  border-color: rgb(75, 85, 99);
+  color: white;
+}
+
+.input-field:focus {
+  outline: none;
+  border-color: rgb(var(--color-primary-500));
+  box-shadow: 0 0 0 2px rgba(var(--color-primary-500), 0.2);
 }
