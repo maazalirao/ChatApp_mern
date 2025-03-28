@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiPlus, FiLogOut, FiUsers, FiMessageCircle, FiSun, FiMoon, FiAlertCircle, FiSearch, FiInfo } from 'react-icons/fi';
+import { FiPlus, FiLogOut, FiUsers, FiMessageCircle, FiSun, FiMoon, FiAlertCircle, FiSearch, FiInfo, FiBarChart2, FiClock, FiCommand, FiHelpCircle } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 
@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [roomName, setRoomName] = useState('');
   const [darkMode, setDarkMode] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const { currentUser, logout } = useAuth();
   const { rooms, users, joinRoom, connected, connectionError } = useSocket();
   const navigate = useNavigate();
@@ -22,6 +23,38 @@ const Dashboard = () => {
       document.documentElement.classList.add('dark');
     }
   }, []);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Cmd/Ctrl + K for search
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        document.querySelector('input[type="text"]')?.focus();
+      }
+      
+      // Cmd/Ctrl + N for new room
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        if (connected) setShowCreateRoom(true);
+      }
+      
+      // Cmd/Ctrl + / for keyboard shortcuts
+      if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+        e.preventDefault();
+        setShowKeyboardShortcuts(prev => !prev);
+      }
+      
+      // Escape to close modals
+      if (e.key === 'Escape') {
+        setShowCreateRoom(false);
+        setShowKeyboardShortcuts(false);
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [connected]);
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
@@ -51,6 +84,11 @@ const Dashboard = () => {
     joinRoom(roomId);
     navigate(`/chat/${roomId}`);
   };
+
+  // Calculate some stats
+  const totalMessages = rooms.reduce((acc, room) => acc + (room.messages?.length || 0), 0);
+  const activeRooms = rooms.filter(room => (room.users?.length || 0) > 0).length;
+  const mostActiveRoom = rooms.sort((a, b) => (b.messages?.length || 0) - (a.messages?.length || 0))[0];
 
   // Filter rooms based on search query
   const filteredRooms = rooms.filter(room => 
@@ -97,6 +135,14 @@ const Dashboard = () => {
             <h1 className="text-xl font-bold text-gray-900 dark:text-white bg-clip-text text-transparent bg-gradient-to-r from-primary-500 to-primary-600">Chatter</h1>
           </div>
           <div className="flex items-center space-x-4">
+            <button
+              onClick={() => setShowKeyboardShortcuts(true)}
+              className="btn-icon text-lg relative overflow-hidden group hidden md:flex"
+              aria-label="Show keyboard shortcuts"
+            >
+              <span className="absolute inset-0 bg-gray-200 dark:bg-gray-700 rounded-full opacity-0 group-hover:opacity-30 transition-opacity duration-300"></span>
+              <FiCommand className="text-gray-600 dark:text-gray-300" />
+            </button>
             <button
               onClick={toggleDarkMode}
               className="btn-icon text-xl relative overflow-hidden group"
@@ -164,6 +210,80 @@ const Dashboard = () => {
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        {/* Welcome Banner with Stats */}
+        <motion.div 
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="bg-gradient-to-r from-primary-500/10 to-primary-600/10 dark:from-primary-500/20 dark:to-primary-600/20 rounded-xl mb-8 overflow-hidden border border-primary-100 dark:border-primary-800 shadow-md"
+        >
+          <div className="p-6">
+            <div className="flex flex-col md:flex-row justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-white flex items-center">
+                  <span className="inline-block mr-3 p-2 bg-primary-100 dark:bg-primary-900/30 rounded-full">
+                    <FiBarChart2 className="text-primary-500" />
+                  </span>
+                  Welcome back, {currentUser.username}!
+                </h2>
+                <p className="mt-2 text-gray-600 dark:text-gray-300 max-w-2xl">
+                  Here's what's happening in your chat rooms. Stay connected and engage with your friends and colleagues.
+                </p>
+              </div>
+              <div className="flex items-center mt-4 md:mt-0">
+                <button
+                  onClick={() => setShowCreateRoom(true)}
+                  className="btn-primary flex items-center text-sm justify-center shadow-lg shadow-primary-500/20 hover:shadow-primary-500/40 transition-all duration-300 transform hover:-translate-y-1"
+                  disabled={!connected}
+                >
+                  <FiPlus className="mr-1" />
+                  New Room
+                </button>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200 dark:border-gray-700 transform transition-all duration-300 hover:shadow-md hover:-translate-y-1">
+                <div className="flex items-center">
+                  <div className="bg-primary-100 dark:bg-primary-900/30 p-3 rounded-full">
+                    <FiUsers className="text-primary-500" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Online Users</p>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{users.length}</h3>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200 dark:border-gray-700 transform transition-all duration-300 hover:shadow-md hover:-translate-y-1">
+                <div className="flex items-center">
+                  <div className="bg-primary-100 dark:bg-primary-900/30 p-3 rounded-full">
+                    <FiMessageCircle className="text-primary-500" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Active Rooms</p>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">{activeRooms} of {rooms.length}</h3>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm rounded-lg p-4 border border-gray-200 dark:border-gray-700 transform transition-all duration-300 hover:shadow-md hover:-translate-y-1">
+                <div className="flex items-center">
+                  <div className="bg-primary-100 dark:bg-primary-900/30 p-3 rounded-full">
+                    <FiClock className="text-primary-500" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Most Active Room</p>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white truncate max-w-[180px]">
+                      {mostActiveRoom?.name || "None"}
+                    </h3>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
           {/* Rooms section */}
           <motion.div
@@ -187,11 +307,14 @@ const Dashboard = () => {
                   </div>
                   <input
                     type="text"
-                    placeholder="Search rooms..."
+                    placeholder="Search rooms... (Ctrl+K)"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="input-field pl-10 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 backdrop-blur-sm bg-white/80 dark:bg-gray-800/80"
                   />
+                  <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                    <kbd className="hidden sm:inline-flex items-center rounded border border-gray-300 dark:border-gray-600 px-2 text-xs font-sans font-medium text-gray-400">⌘K</kbd>
+                  </div>
                 </div>
                 
                 <button
@@ -254,6 +377,85 @@ const Dashboard = () => {
                       disabled={!roomName.trim() || !connected}
                     >
                       Create
+                    </button>
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+            
+            {/* Keyboard Shortcuts Modal */}
+            {showKeyboardShortcuts && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+                onClick={() => setShowKeyboardShortcuts(false)}
+              >
+                <motion.div
+                  initial={{ scale: 0.9, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ type: "spring", stiffness: 300, damping: 30 }}
+                  className="bg-white dark:bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-2xl border border-gray-200 dark:border-gray-700 backdrop-blur-lg bg-white/90 dark:bg-gray-800/90"
+                  onClick={e => e.stopPropagation()}
+                >
+                  <div className="absolute -top-16 left-1/2 transform -translate-x-1/2">
+                    <div className="bg-primary-500 text-white p-4 rounded-full shadow-lg">
+                      <FiCommand className="h-6 w-6" />
+                    </div>
+                  </div>
+                  <h3 className="text-xl font-bold mb-6 text-gray-900 dark:text-white flex items-center justify-center mt-2">
+                    Keyboard Shortcuts
+                  </h3>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center">
+                        <FiSearch className="text-primary-500 mr-3" />
+                        <span className="text-gray-700 dark:text-gray-300">Search Rooms</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <kbd className="kbd">Ctrl</kbd>
+                        <span>+</span>
+                        <kbd className="kbd">K</kbd>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center">
+                        <FiPlus className="text-primary-500 mr-3" />
+                        <span className="text-gray-700 dark:text-gray-300">Create New Room</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <kbd className="kbd">Ctrl</kbd>
+                        <span>+</span>
+                        <kbd className="kbd">N</kbd>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center">
+                        <FiCommand className="text-primary-500 mr-3" />
+                        <span className="text-gray-700 dark:text-gray-300">Show Shortcuts</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <kbd className="kbd">Ctrl</kbd>
+                        <span>+</span>
+                        <kbd className="kbd">/</kbd>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-center py-2">
+                      <div className="flex items-center">
+                        <FiHelpCircle className="text-primary-500 mr-3" />
+                        <span className="text-gray-700 dark:text-gray-300">Close Modals</span>
+                      </div>
+                      <div className="flex items-center">
+                        <kbd className="kbd">Esc</kbd>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="mt-6 flex justify-center">
+                    <button
+                      onClick={() => setShowKeyboardShortcuts(false)}
+                      className="btn-primary shadow-lg shadow-primary-500/20 hover:shadow-primary-500/40 transition-all duration-300"
+                    >
+                      Close
                     </button>
                   </div>
                 </motion.div>
@@ -371,7 +573,7 @@ const Dashboard = () => {
                 </span>
               </div>
               {users && users.length > 0 ? (
-                <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[400px] overflow-y-auto">
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700 max-h-[400px] overflow-y-auto custom-scrollbar">
                   {users.map((user) => (
                     <motion.li
                       key={user.id}
