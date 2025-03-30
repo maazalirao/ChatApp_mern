@@ -101,6 +101,7 @@ const Dashboard = () => {
               onClick={toggleDarkMode}
               className="btn-icon text-xl relative overflow-hidden group"
               aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+              title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
             >
               <span className="absolute inset-0 bg-gray-200 dark:bg-gray-700 rounded-full opacity-0 group-hover:opacity-30 transition-opacity duration-300"></span>
               {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon className="text-gray-600" />}
