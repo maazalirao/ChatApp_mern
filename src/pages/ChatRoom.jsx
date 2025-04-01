@@ -227,6 +227,7 @@ const ChatRoom = () => {
               className="btn-icon"
               onClick={() => setShowMenu(!showMenu)}
               aria-label="More options"
+              title="More room options"
             >
               <FiMoreVertical />
             </button>
@@ -247,6 +248,7 @@ const ChatRoom = () => {
                         setShowMenu(false);
                         setShowUsersList(true);
                       }}
+                      title="View all room participants"
                     >
                       <FiUsers className="mr-2" />
                       View Participants
@@ -257,6 +259,7 @@ const ChatRoom = () => {
                         setShowMenu(false);
                         // Show room info or other actions
                       }}
+                      title="View room information"
                     >
                       <FiInfo className="mr-2" />
                       Room Info
@@ -264,6 +267,7 @@ const ChatRoom = () => {
                     <button
                       className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                       onClick={handleLeaveRoom}
+                      title="Leave this chat room"
                     >
                       <FiLogOut className="mr-2" />
                       Leave Room
@@ -443,6 +447,7 @@ const ChatRoom = () => {
             placeholder="Type a message..."
             className="input-field flex-1"
             autoFocus
+            title="Type your message here"
           />
           
           <button
@@ -450,6 +455,7 @@ const ChatRoom = () => {
             className="btn-primary p-2 rounded-full flex items-center justify-center"
             disabled={!message.trim()}
             aria-label="Send message"
+            title="Send message"
           >
             <FiSend size={18} />
           </button>
