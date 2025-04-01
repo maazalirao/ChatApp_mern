@@ -259,6 +259,7 @@ const Dashboard = () => {
                       onClick={handleCreateRoom}
                       className="btn-primary shadow-lg shadow-primary-500/20 hover:shadow-primary-500/40 transition-all duration-300 transform hover:-translate-y-1"
                       disabled={!roomName.trim() || !connected}
+                      title="Create the new chat room"
                     >
                       Create
                     </button>
