@@ -288,7 +288,7 @@ const ChatRoom = () => {
               <button 
                 onClick={() => setShowUsersList(false)}
                 className="btn-icon"
-                aria-label="Close users list"
+                aria-label="Close users lis"
               >
                 <FiX />
               </button>
