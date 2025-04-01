@@ -251,6 +251,7 @@ const Dashboard = () => {
                     <button
                       onClick={() => setShowCreateRoom(false)}
                       className="btn-secondary hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-300"
+                      title="Cancel room creation"
                     >
                       Cancel
                     </button>
