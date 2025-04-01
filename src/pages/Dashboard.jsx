@@ -332,6 +332,7 @@ const Dashboard = () => {
                       <button
                         onClick={() => setSearchQuery('')}
                         className="text-primary-500 hover:text-primary-700 font-medium hover:underline"
+                        title="Clear search results"
                       >
                         Clear search
                       </button>
