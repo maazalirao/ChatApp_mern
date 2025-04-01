@@ -187,6 +187,7 @@ const ChatRoom = () => {
             onClick={() => navigate('/')}
             className="btn-icon mr-2"
             aria-label="Back to dashboard"
+            title="Back to dashboard"
           >
             <FiArrowLeft />
           </button>
@@ -216,6 +217,7 @@ const ChatRoom = () => {
             className="btn-icon mr-1"
             onClick={() => setShowUsersList(!showUsersList)}
             aria-label="Show users"
+            title="Show room participants"
           >
             <FiUsers />
           </button>
@@ -288,7 +290,8 @@ const ChatRoom = () => {
               <button 
                 onClick={() => setShowUsersList(false)}
                 className="btn-icon"
-                aria-label="Close users lis"
+                aria-label="Close users list"
+                title="Close participants list"
               >
                 <FiX />
               </button>
@@ -426,6 +429,7 @@ const ChatRoom = () => {
             type="button"
             className="btn-icon text-gray-500 dark:text-gray-400"
             aria-label="Add emoji"
+            title="Add emoji to message"
           >
             <FiSmile />
           </button>
