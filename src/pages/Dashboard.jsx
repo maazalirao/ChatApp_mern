@@ -194,6 +194,7 @@ const Dashboard = () => {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="input-field pl-10 focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 backdrop-blur-sm bg-white/80 dark:bg-gray-800/80"
+                    title="Search for chat rooms"
                   />
                 </div>
                 
