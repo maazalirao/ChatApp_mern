@@ -244,6 +244,7 @@ const Dashboard = () => {
                       className="input-field focus:ring-primary-500 focus:border-primary-500 transition-all duration-300 backdrop-blur-sm bg-white/80 dark:bg-gray-800/80"
                       placeholder="Enter room name"
                       autoFocus
+                      title="Enter the name for your new chat room"
                     />
                   </div>
                   <div className="flex justify-end space-x-3">
