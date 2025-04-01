@@ -202,6 +202,7 @@ const Dashboard = () => {
                   onClick={() => setShowCreateRoom(true)}
                   className="btn-primary flex items-center text-sm w-full sm:w-auto justify-center shadow-lg shadow-primary-500/20 hover:shadow-primary-500/40 transition-all duration-300 transform hover:-translate-y-1"
                   disabled={!connected}
+                  title="Create a new chat room"
                 >
                   <FiPlus className="mr-1" />
                   Create Room
