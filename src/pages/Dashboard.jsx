@@ -112,6 +112,7 @@ const Dashboard = () => {
                 src={currentUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.username)}&background=random`}
                 alt={currentUser.username}
                 className="avatar mr-2 ring-2 ring-primary-500 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 hover:scale-110 transition-transform duration-300"
+                title={`${currentUser.username}'s profile picture`}
               />
               <span className="font-medium text-gray-900 dark:text-white">{currentUser.username}</span>
             </div>
