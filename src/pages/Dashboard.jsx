@@ -119,6 +119,7 @@ const Dashboard = () => {
             <button
               onClick={handleLogout}
               className="btn-secondary flex items-center text-sm hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-300 transform hover:-translate-y-1"
+              title="Logout from your account"
             >
               <FiLogOut className="mr-1" />
               Logout
