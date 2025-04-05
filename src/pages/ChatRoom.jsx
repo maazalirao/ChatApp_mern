@@ -446,7 +446,7 @@ const ChatRoom = () => {
             onChange={(e) => setMessage(e.target.value)}
             onKeyDown={() => handleTyping()}
             ref={messageInputRef}
-            placeholder="Type a message..."
+            placeholder="Write something nice..."
             className="input-field flex-1"
             autoFocus
             title="Type your message here"
