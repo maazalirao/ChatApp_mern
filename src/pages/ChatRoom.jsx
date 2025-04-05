@@ -164,7 +164,8 @@ const ChatRoom = () => {
       messageInputRef.current?.focus();
     } catch (error) {
       console.error('Error sending message:', error);
-      // You could add error handling here
+      // Show error toast to user
+      alert(`Failed to send message: ${error.message}`);
     }
   };
   
