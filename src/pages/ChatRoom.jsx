@@ -27,6 +27,7 @@ const ChatRoom = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showUsersList, setShowUsersList] = useState(false);
   const [roomInfo, setRoomInfo] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   
   const { roomId } = useParams();
   const { currentUser } = useAuth();
@@ -86,6 +87,7 @@ const ChatRoom = () => {
     
     console.log(`Setting ${uniqueMessages.length} room messages (filtered from ${roomMsgs.length})`);
     setRoomMessages(uniqueMessages);
+    setIsLoading(false);
   }, [messages, roomId]);
   
   // Auto-scroll to bottom when new messages arrive
@@ -353,7 +355,12 @@ const ChatRoom = () => {
       
       {/* Chat messages */}
       <div className="chat-messages">
-        {roomMessages.length === 0 ? (
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center h-full">
+            <div className="animate-spin h-12 w-12 border-4 border-primary-500 rounded-full border-t-transparent"></div>
+            <p className="mt-4 text-gray-500 dark:text-gray-400">Loading messages...</p>
+          </div>
+        ) : roomMessages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 text-center">
             <div className="h-20 w-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
               <FiMessageCircle size={40} />
