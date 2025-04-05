@@ -1,3 +1,4 @@
+// ChatRoom component for real-time messaging
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
