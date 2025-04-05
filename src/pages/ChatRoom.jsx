@@ -150,6 +150,7 @@ const ChatRoom = () => {
     
     try {
       console.log(`Sending message to room ${roomId}: "${message}"`);
+      console.log('Message sent at:', new Date().toISOString());
       // Send message
       sendMessage(roomId, message.trim());
       
