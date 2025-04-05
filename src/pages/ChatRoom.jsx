@@ -148,6 +148,12 @@ const ChatRoom = () => {
     // Don't send empty messages
     if (message.trim() === '') return;
     
+    // Limit message length
+    if (message.length > 500) {
+      alert('Message is too long! Maximum 500 characters allowed.');
+      return;
+    }
+    
     try {
       console.log(`Sending message to room ${roomId}: "${message}"`);
       console.log('Message sent at:', new Date().toISOString());
