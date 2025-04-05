@@ -337,9 +337,9 @@ const ChatRoom = () => {
             <div className="h-20 w-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
               <FiMessageCircle size={40} />
             </div>
-            <h3 className="text-xl font-medium mb-2">No messages yet</h3>
+            <h3 className="text-xl font-medium mb-2">Chat is empty</h3>
             <p className="max-w-md text-gray-500 dark:text-gray-400">
-              Be the first to start the conversation in this room! Send a message below to get started.
+              Start a conversation! Send a message below to break the ice.
             </p>
           </div>
         ) : (
