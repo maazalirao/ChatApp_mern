@@ -171,8 +171,10 @@ const ChatRoom = () => {
   
   // Handle leaving the room
   const handleLeaveRoom = () => {
-    leaveRoom(roomId);
-    navigate('/');
+    if (window.confirm('Are you sure you want to leave this room?')) {
+      leaveRoom(roomId);
+      navigate('/');
+    }
   };
 
   // Animation variants
