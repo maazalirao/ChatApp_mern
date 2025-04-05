@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow, format } from 'date-fns';
 import { 
   FiSend, 
   FiArrowLeft, 
@@ -405,6 +405,10 @@ const ChatRoom = () => {
                     
                     <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
                       {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
+                      <span className="mx-1">•</span>
+                      <span title={new Date(msg.timestamp).toLocaleString()}>
+                        {format(new Date(msg.timestamp), 'h:mm a')}
+                      </span>
                     </div>
                   </div>
                   
