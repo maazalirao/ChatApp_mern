@@ -13,7 +13,8 @@ import {
   FiMessageCircle,
   FiX,
   FiChevronDown,
-  FiSmile
+  FiSmile,
+  FiTrash2
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -274,6 +275,17 @@ const ChatRoom = () => {
                     >
                       <FiInfo className="mr-2" />
                       Room Info
+                    </button>
+                    <button
+                      className="flex w-full items-center px-4 py-2 text-sm text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                      onClick={() => {
+                        setShowMenu(false);
+                        setRoomMessages([]);
+                      }}
+                      title="Clear chat history"
+                    >
+                      <FiTrash2 className="mr-2" />
+                      Clear Chat
                     </button>
                     <button
                       className="flex w-full items-center px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
