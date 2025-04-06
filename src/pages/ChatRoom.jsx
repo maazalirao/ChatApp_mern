@@ -479,17 +479,23 @@ const ChatRoom = () => {
             <FiSmile />
           </button>
           
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-            onKeyDown={() => handleTyping()}
-            ref={messageInputRef}
-            placeholder="Write something nice..."
-            className="input-field flex-1"
-            autoFocus
-            title="Type your message here"
-          />
+          <div className="flex-1 relative">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              onKeyDown={() => handleTyping()}
+              ref={messageInputRef}
+              placeholder="Write something nice..."
+              className="input-field w-full"
+              autoFocus
+              title="Type your message here"
+              maxLength={500}
+            />
+            <div className="absolute right-2 bottom-1 text-xs text-gray-400">
+              {message.length}/500
+            </div>
+          </div>
           
           <button
             type="submit"
