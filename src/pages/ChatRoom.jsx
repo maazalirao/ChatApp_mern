@@ -184,6 +184,15 @@ const ChatRoom = () => {
     }
   };
   
+  // Handle keyboard shortcuts
+  const handleKeyDown = (e) => {
+    // Send on Enter, but not with Shift+Enter (which creates a new line)
+    if (e.key === 'Enter' && !e.shiftKey) {
+      handleSendMessage(e);
+    }
+    handleTyping();
+  };
+  
   // Handle leaving the room
   const handleLeaveRoom = () => {
     if (window.confirm('Are you sure you want to leave this room?')) {
@@ -484,12 +493,12 @@ const ChatRoom = () => {
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={() => handleTyping()}
+              onKeyDown={handleKeyDown}
               ref={messageInputRef}
               placeholder="Write something nice..."
               className="input-field w-full"
               autoFocus
-              title="Type your message here"
+              title="Type your message here (Press Enter to send)"
               maxLength={500}
             />
             <div className="absolute right-2 bottom-1 text-xs text-gray-400">
