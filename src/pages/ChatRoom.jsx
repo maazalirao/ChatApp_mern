@@ -28,6 +28,7 @@ const ChatRoom = () => {
   const [showUsersList, setShowUsersList] = useState(false);
   const [roomInfo, setRoomInfo] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -160,6 +161,8 @@ const ChatRoom = () => {
       return;
     }
     
+    setIsSending(true);
+    
     try {
       console.log(`Sending message to room ${roomId}: "${message}"`);
       console.log('Message sent at:', new Date().toISOString());
@@ -177,6 +180,9 @@ const ChatRoom = () => {
       
       // Focus the input field
       messageInputRef.current?.focus();
+      
+      // Reset sending state after a short delay to show animation
+      setTimeout(() => setIsSending(false), 300);
     } catch (error) {
       console.error('Error sending message:', error);
       // Show error toast to user
@@ -508,8 +514,8 @@ const ChatRoom = () => {
           
           <button
             type="submit"
-            className="btn-primary p-2 rounded-full flex items-center justify-center"
-            disabled={!message.trim()}
+            className={`btn-primary p-2 rounded-full flex items-center justify-center ${isSending ? 'animate-pulse' : ''}`}
+            disabled={!message.trim() || isSending}
             aria-label="Send message"
             title="Send message"
           >
