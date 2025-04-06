@@ -416,6 +416,7 @@ const ChatRoom = () => {
                       <span title={new Date(msg.timestamp).toLocaleString()}>
                         {format(new Date(msg.timestamp), 'h:mm a')}
                       </span>
+                      {isCurrentUser && <span className="ml-1 text-green-500">✓</span>}
                     </div>
                   </div>
                   
