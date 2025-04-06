@@ -29,6 +29,9 @@ const ChatRoom = () => {
   const [roomInfo, setRoomInfo] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   
+  // Sound effects
+  const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
+  
   const { roomId } = useParams();
   const { currentUser } = useAuth();
   const { 
@@ -162,6 +165,9 @@ const ChatRoom = () => {
       console.log('Message sent at:', new Date().toISOString());
       // Send message
       sendMessage(roomId, message.trim());
+      
+      // Play sound effect
+      messageSound.current?.play().catch(err => console.log('Cannot play sound'));
       
       // Clear input
       setMessage('');
