@@ -14,7 +14,10 @@ import {
   FiX,
   FiChevronDown,
   FiSmile,
-  FiTrash2
+  FiTrash2,
+  FiBold,
+  FiItalic,
+  FiUnderline
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -29,6 +32,7 @@ const ChatRoom = () => {
   const [roomInfo, setRoomInfo] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -213,16 +217,54 @@ const ChatRoom = () => {
     visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
   };
   
-  // Format message text with clickable links
-  const formatMessageText = (text) => {
-    // URL regex pattern
-    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
+  // Apply text formatting
+  const applyFormatting = (type) => {
+    const input = messageInputRef.current;
+    if (!input) return;
     
-    // Split text by URLs
-    const parts = text.split(urlPattern);
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const text = message;
+    const selectedText = text.substring(start, end);
+    
+    let formattedText = '';
+    switch (type) {
+      case 'bold':
+        formattedText = `**${selectedText}**`;
+        break;
+      case 'italic':
+        formattedText = `_${selectedText}_`;
+        break;
+      case 'underline':
+        formattedText = `<u>${selectedText}</u>`;
+        break;
+      default:
+        return;
+    }
+    
+    const newText = text.substring(0, start) + formattedText + text.substring(end);
+    setMessage(newText);
+    
+    // Focus back on input after formatting
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(start + 2, end + 2);
+    }, 0);
+  };
+  
+  // Render formatted text
+  const renderFormattedText = (text) => {
+    // Replace markdown-style formatting
+    let formattedText = text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/_(.*?)_/g, '<em>$1</em>')
+      .replace(/<u>(.*?)<\/u>/g, '<u>$1</u>');
+    
+    // Then process URLs
+    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
+    const parts = formattedText.split(urlPattern);
     
     return parts.map((part, index) => {
-      // Check if part is a URL
       if (part.match(urlPattern)) {
         return (
           <a 
@@ -236,8 +278,13 @@ const ChatRoom = () => {
           </a>
         );
       }
-      return part;
+      return <span key={index} dangerouslySetInnerHTML={{ __html: part }} />;
     });
+  };
+  
+  // Replace formatMessageText with renderFormattedText
+  const formatMessageText = (text) => {
+    return renderFormattedText(text);
   };
   
   return (
@@ -512,6 +559,47 @@ const ChatRoom = () => {
       {/* Chat input */}
       <div className="chat-input-container">
         <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+          <div className="relative">
+            <button
+              type="button"
+              className="btn-icon text-gray-500 dark:text-gray-400"
+              aria-label="Formatting options"
+              title="Text formatting options"
+              onClick={() => setShowFormatting(!showFormatting)}
+            >
+              <FiBold />
+            </button>
+            
+            {showFormatting && (
+              <div className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 rounded-md shadow-lg p-2 flex space-x-1">
+                <button
+                  type="button"
+                  className="btn-icon text-gray-500 dark:text-gray-400"
+                  onClick={() => applyFormatting('bold')}
+                  title="Bold"
+                >
+                  <FiBold />
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon text-gray-500 dark:text-gray-400"
+                  onClick={() => applyFormatting('italic')}
+                  title="Italic"
+                >
+                  <FiItalic />
+                </button>
+                <button
+                  type="button"
+                  className="btn-icon text-gray-500 dark:text-gray-400"
+                  onClick={() => applyFormatting('underline')}
+                  title="Underline"
+                >
+                  <FiUnderline />
+                </button>
+              </div>
+            )}
+          </div>
+          
           <button
             type="button"
             className="btn-icon text-gray-500 dark:text-gray-400"
