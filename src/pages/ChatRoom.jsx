@@ -21,7 +21,10 @@ import {
   FiThumbsUp,
   FiHeart,
   FiLaugh,
-  FiFrown
+  FiFrown,
+  FiCopy,
+  FiReply,
+  FiEdit
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -40,6 +43,7 @@ const ChatRoom = () => {
   const [showReactions, setShowReactions] = useState(null);
   const [autoScroll, setAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
+  const [swipedMessageId, setSwipedMessageId] = useState(null);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -437,6 +441,34 @@ const ChatRoom = () => {
     }
   };
   
+  // Handle message actions
+  const handleCopyMessage = (text) => {
+    navigator.clipboard.writeText(text);
+    // Could show a toast notification here
+  };
+  
+  const handleReplyToMessage = (msg) => {
+    setMessage(`> ${msg.user?.username || 'User'}: ${msg.text}\n\n`);
+    messageInputRef.current?.focus();
+  };
+  
+  const handleEditMessage = (msg) => {
+    if (msg.userId === currentUser.id) {
+      setMessage(msg.text);
+      messageInputRef.current?.focus();
+      // In a real app, you'd want to mark this as an edit
+    }
+  };
+  
+  const handleDeleteMessage = (msg) => {
+    if (msg.userId === currentUser.id) {
+      if (window.confirm('Are you sure you want to delete this message?')) {
+        setRoomMessages(prev => prev.filter(m => m.id !== msg.id));
+        // In a real app, you'd want to send this to the server
+      }
+    }
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -634,7 +666,7 @@ const ChatRoom = () => {
                   variants={messageVariants}
                   initial="hidden"
                   animate="visible"
-                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
+                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} group`}
                 >
                   {!isCurrentUser && (
                     <img
@@ -651,34 +683,99 @@ const ChatRoom = () => {
                       </div>
                     )}
                     
-                    <div 
-                      className={`${isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'} 
+                    <motion.div
+                      drag="x"
+                      dragConstraints={{ left: 0, right: 0 }}
+                      onDragEnd={(e, { offset }) => {
+                        if (Math.abs(offset.x) > 50) {
+                          setSwipedMessageId(msg.id);
+                        }
+                      }}
+                      className="relative"
+                    >
+                      <div className={`${isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'} 
                         p-3 rounded-lg max-w-xs break-words relative
                         ${isCurrentUser ? 
                           'bg-primary-500 text-white ml-auto rounded-br-none' : 
                           'bg-gray-100 dark:bg-gray-800 rounded-bl-none'
                         }
                         hover:shadow-md transition-shadow duration-200
-                      `}
-                    >
-                      <motion.div
-                        variants={bubbleVariants}
-                        whileHover="hover"
-                        whileTap="tap"
-                      >
-                        {formatMessageText(msg.text)}
-                      </motion.div>
-                      <div 
-                        className={`absolute bottom-0 ${isCurrentUser ? 'right-0 transform translate-x-2' : 'left-0 transform -translate-x-2'} 
-                          w-4 h-4 ${isCurrentUser ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-800'}
-                        `} 
-                        style={{
-                          clipPath: isCurrentUser ? 
-                            'polygon(0 0, 100% 0, 100% 100%)' : 
-                            'polygon(0 0, 100% 0, 0 100%)'
-                        }}
-                      />
-                    </div>
+                      `}>
+                        <motion.div
+                          variants={bubbleVariants}
+                          whileHover="hover"
+                          whileTap="tap"
+                        >
+                          {formatMessageText(msg.text)}
+                        </motion.div>
+                        <div 
+                          className={`absolute bottom-0 ${isCurrentUser ? 'right-0 transform translate-x-2' : 'left-0 transform -translate-x-2'} 
+                            w-4 h-4 ${isCurrentUser ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-800'}
+                          `} 
+                          style={{
+                            clipPath: isCurrentUser ? 
+                              'polygon(0 0, 100% 0, 100% 100%)' : 
+                              'polygon(0 0, 100% 0, 0 100%)'
+                          }}
+                        />
+                      </div>
+                      
+                      {/* Message actions */}
+                      {swipedMessageId === msg.id && (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.9 }}
+                          className={`absolute ${isCurrentUser ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} 
+                            top-0 flex items-center space-x-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1`}
+                        >
+                          <button
+                            className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                            onClick={() => {
+                              handleCopyMessage(msg.text);
+                              setSwipedMessageId(null);
+                            }}
+                            title="Copy message"
+                          >
+                            <FiCopy size={16} />
+                          </button>
+                          <button
+                            className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                            onClick={() => {
+                              handleReplyToMessage(msg);
+                              setSwipedMessageId(null);
+                            }}
+                            title="Reply to message"
+                          >
+                            <FiReply size={16} />
+                          </button>
+                          {isCurrentUser && (
+                            <>
+                              <button
+                                className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                                onClick={() => {
+                                  handleEditMessage(msg);
+                                  setSwipedMessageId(null);
+                                }}
+                                title="Edit message"
+                              >
+                                <FiEdit size={16} />
+                              </button>
+                              <button
+                                className="btn-icon text-red-500 hover:text-red-600"
+                                onClick={() => {
+                                  handleDeleteMessage(msg);
+                                  setSwipedMessageId(null);
+                                }}
+                                title="Delete message"
+                              >
+                                <FiTrash2 size={16} />
+                              </button>
+                            </>
+                          )}
+                        </motion.div>
+                      )}
+                    </motion.div>
                     
                     {renderReactions(msg)}
                     
