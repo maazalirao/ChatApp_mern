@@ -30,6 +30,8 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
+import data from '@emoji-mart/data';
+import Picker from '@emoji-mart/react';
 
 const ChatRoom = () => {
   const [message, setMessage] = useState('');
@@ -50,6 +52,9 @@ const ChatRoom = () => {
   const [showSearch, setShowSearch] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [selectedResultIndex, setSelectedResultIndex] = useState(-1);
+  const [showReactionPicker, setShowReactionPicker] = useState(false);
+  const [reactionMessage, setReactionMessage] = useState(null);
+  const [reactions, setReactions] = useState({});
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -335,116 +340,106 @@ const ChatRoom = () => {
   };
   
   // Handle adding a reaction to a message
-  const handleAddReaction = (messageId, reaction) => {
-    // In a real app, this would send the reaction to the server
-    console.log(`Adding reaction ${reaction} to message ${messageId}`);
+  const handleAddReaction = (emoji, messageId) => {
+    const reaction = {
+      emoji: emoji.native,
+      userId: currentUser.id,
+      username: currentUser.username
+    };
     
-    // For demo purposes, we'll just update the local state
-    setRoomMessages(prevMessages => 
-      prevMessages.map(msg => {
-        if (msg.id === messageId) {
-          // Initialize reactions if they don't exist
-          if (!msg.reactions) {
-            msg.reactions = {};
-          }
-          
-          // Initialize this reaction if it doesn't exist
-          if (!msg.reactions[reaction]) {
-            msg.reactions[reaction] = [];
-          }
-          
-          // Add the current user to the reaction if not already there
-          if (!msg.reactions[reaction].includes(currentUser.id)) {
-            msg.reactions[reaction].push(currentUser.id);
-          }
-          
-          return { ...msg };
-        }
-        return msg;
-      })
+    const messageReactions = reactions[messageId] || [];
+    const existingReactionIndex = messageReactions.findIndex(
+      r => r.emoji === emoji.native && r.userId === currentUser.id
     );
     
-    // Close the reactions menu
-    setShowReactions(null);
-  };
-  
-  // Handle removing a reaction from a message
-  const handleRemoveReaction = (messageId, reaction) => {
-    // In a real app, this would send the removal to the server
-    console.log(`Removing reaction ${reaction} from message ${messageId}`);
-    
-    // For demo purposes, we'll just update the local state
-    setRoomMessages(prevMessages => 
-      prevMessages.map(msg => {
-        if (msg.id === messageId && msg.reactions && msg.reactions[reaction]) {
-          // Remove the current user from the reaction
-          msg.reactions[reaction] = msg.reactions[reaction].filter(id => id !== currentUser.id);
-          
-          // If no one reacted with this emoji, remove it
-          if (msg.reactions[reaction].length === 0) {
-            delete msg.reactions[reaction];
-          }
-          
-          return { ...msg };
-        }
-        return msg;
-      })
-    );
-  };
-  
-  // Check if the current user has reacted with a specific emoji
-  const hasReacted = (message, reaction) => {
-    return message.reactions && 
-           message.reactions[reaction] && 
-           message.reactions[reaction].includes(currentUser.id);
-  };
-  
-  // Get reaction count for a specific emoji
-  const getReactionCount = (message, reaction) => {
-    return message.reactions && message.reactions[reaction] ? message.reactions[reaction].length : 0;
-  };
-  
-  // Render reactions for a message
-  const renderReactions = (message) => {
-    if (!message.reactions || Object.keys(message.reactions).length === 0) {
-      return null;
+    let updatedReactions;
+    if (existingReactionIndex >= 0) {
+      // Remove reaction if it already exists
+      updatedReactions = {
+        ...reactions,
+        [messageId]: [
+          ...messageReactions.slice(0, existingReactionIndex),
+          ...messageReactions.slice(existingReactionIndex + 1)
+        ]
+      };
+    } else {
+      // Add new reaction
+      updatedReactions = {
+        ...reactions,
+        [messageId]: [...messageReactions, reaction]
+      };
     }
+    
+    setReactions(updatedReactions);
+    socket.emit('message_reaction', {
+      roomId,
+      messageId,
+      reaction
+    });
+    setShowReactionPicker(false);
+  };
+  
+  useEffect(() => {
+    socket.on('message_reaction', ({ messageId, reaction }) => {
+      setReactions(prev => ({
+        ...prev,
+        [messageId]: [...(prev[messageId] || []), reaction]
+      }));
+    });
+    
+    socket.on('reaction_removed', ({ messageId, userId }) => {
+      setReactions(prev => ({
+        ...prev,
+        [messageId]: (prev[messageId] || []).filter(r => r.userId !== userId)
+      }));
+    });
+    
+    return () => {
+      socket.off('message_reaction');
+      socket.off('reaction_removed');
+    };
+  }, []);
+  
+  const renderReactions = (message) => {
+    const messageReactions = reactions[message.id] || [];
+    if (messageReactions.length === 0) return null;
+    
+    // Group reactions by emoji
+    const groupedReactions = messageReactions.reduce((acc, reaction) => {
+      if (!acc[reaction.emoji]) {
+        acc[reaction.emoji] = [];
+      }
+      acc[reaction.emoji].push(reaction);
+      return acc;
+    }, {});
     
     return (
       <div className="flex flex-wrap gap-1 mt-1">
-        {Object.entries(message.reactions).map(([reaction, userIds]) => (
-          <button
-            key={reaction}
-            className={`flex items-center px-1.5 py-0.5 rounded-full text-xs ${
-              hasReacted(message, reaction) 
-                ? 'bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-300' 
-                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
-            }`}
-            onClick={() => hasReacted(message, reaction) 
-              ? handleRemoveReaction(message.id, reaction)
-              : handleAddReaction(message.id, reaction)
-            }
-            title={userIds.map(id => {
-              const user = users.find(u => u.id === id);
-              return user ? user.username : 'Unknown user';
-            }).join(', ')}
-          >
-            {getReactionEmoji(reaction)} {userIds.length}
-          </button>
-        ))}
+        {Object.entries(groupedReactions).map(([emoji, reactions]) => {
+          const hasReacted = reactions.some(r => r.userId === currentUser.id);
+          
+          return (
+            <button
+              key={emoji}
+              onClick={() => handleAddReaction({ native: emoji }, message.id)}
+              className={`
+                inline-flex items-center space-x-1 rounded-full px-2 py-0.5 text-xs
+                ${hasReacted ? 
+                  'bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-300' : 
+                  'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300'
+                }
+                hover:bg-primary-200 dark:hover:bg-primary-800
+                transition-colors duration-200
+              `}
+              title={reactions.map(r => r.username).join(', ')}
+            >
+              <span>{emoji}</span>
+              <span>{reactions.length}</span>
+            </button>
+          );
+        })}
       </div>
     );
-  };
-  
-  // Get emoji for reaction type
-  const getReactionEmoji = (reaction) => {
-    switch (reaction) {
-      case 'thumbsup': return '👍';
-      case 'heart': return '❤️';
-      case 'laugh': return '😂';
-      case 'sad': return '😢';
-      default: return reaction;
-    }
   };
   
   // Handle message actions
@@ -941,18 +936,22 @@ const ChatRoom = () => {
                               )}
                             </motion.div>
                             
-                            {renderReactions(msg)}
+                            {/* Reaction picker */}
+                            <button
+                              onClick={() => {
+                                setReactionMessage(msg);
+                                setShowReactionPicker(true);
+                              }}
+                              className="absolute -right-8 top-1/2 transform -translate-y-1/2 
+                                opacity-0 group-hover:opacity-100
+                                text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
+                                transition-opacity duration-200"
+                            >
+                              <FiSmile className="w-4 h-4" />
+                            </button>
                             
-                            {isLastInGroup && (
-                              <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
-                                {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
-                                <span className="mx-1">•</span>
-                                <span title={new Date(msg.timestamp).toLocaleString()}>
-                                  {format(new Date(msg.timestamp), 'h:mm a')}
-                                </span>
-                                {isCurrentUser && <span className="ml-1 text-green-500">✓</span>}
-                              </div>
-                            )}
+                            {/* Render reactions */}
+                            {renderReactions(msg)}
                           </motion.div>
                         );
                       })}
@@ -1137,6 +1136,32 @@ const ChatRoom = () => {
           </button>
         </form>
       </div>
+      
+      {/* Reaction picker */}
+      {showReactionPicker && reactionMessage?.id === msg.id && (
+        <div className="absolute right-0 bottom-full mb-2 z-50">
+          <div className="relative">
+            <Picker
+              data={data}
+              onEmojiSelect={(emoji) => handleAddReaction(emoji, msg.id)}
+              theme={isDarkMode ? 'dark' : 'light'}
+              previewPosition="none"
+              skinTonePosition="none"
+              searchPosition="none"
+              perLine={8}
+              maxFrequentRows={1}
+            />
+            <button
+              onClick={() => setShowReactionPicker(false)}
+              className="absolute -top-2 -right-2 bg-white dark:bg-gray-800 rounded-full p-1
+                text-gray-400 hover:text-gray-600 dark:hover:text-gray-300
+                shadow-md"
+            >
+              <FiX className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
