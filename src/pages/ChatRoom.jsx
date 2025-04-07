@@ -24,7 +24,9 @@ import {
   FiFrown,
   FiCopy,
   FiReply,
-  FiEdit
+  FiEdit,
+  FiSearch,
+  FiChevronUp
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -44,6 +46,10 @@ const ChatRoom = () => {
   const [autoScroll, setAutoScroll] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const [swipedMessageId, setSwipedMessageId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedResultIndex, setSelectedResultIndex] = useState(-1);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -469,6 +475,48 @@ const ChatRoom = () => {
     }
   };
   
+  // Handle search
+  const handleSearch = (query) => {
+    setSearchQuery(query);
+    
+    if (!query.trim()) {
+      setSearchResults([]);
+      setSelectedResultIndex(-1);
+      return;
+    }
+    
+    // Search through messages
+    const results = roomMessages.reduce((acc, msg, index) => {
+      if (msg.text.toLowerCase().includes(query.toLowerCase())) {
+        acc.push({ index, message: msg });
+      }
+      return acc;
+    }, []);
+    
+    setSearchResults(results);
+    setSelectedResultIndex(results.length - 1);
+  };
+  
+  // Navigate search results
+  const navigateSearch = (direction) => {
+    if (searchResults.length === 0) return;
+    
+    let newIndex;
+    if (direction === 'up') {
+      newIndex = selectedResultIndex > 0 ? selectedResultIndex - 1 : searchResults.length - 1;
+    } else {
+      newIndex = selectedResultIndex < searchResults.length - 1 ? selectedResultIndex + 1 : 0;
+    }
+    
+    setSelectedResultIndex(newIndex);
+    
+    // Scroll to the selected message
+    const messageElement = document.getElementById(`message-${searchResults[newIndex].message.id}`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -504,6 +552,15 @@ const ChatRoom = () => {
         </div>
         
         <div className="flex items-center">
+          <button 
+            className="btn-icon mr-1"
+            onClick={() => setShowSearch(!showSearch)}
+            aria-label="Search messages"
+            title="Search messages"
+          >
+            <FiSearch />
+          </button>
+          
           <button 
             className="btn-icon mr-1"
             onClick={() => setShowUsersList(!showUsersList)}
@@ -581,6 +638,68 @@ const ChatRoom = () => {
           </div>
         </div>
       </div>
+      
+      {/* Search bar */}
+      <AnimatePresence>
+        {showSearch && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-gray-200 dark:border-gray-700"
+          >
+            <div className="p-2 flex items-center space-x-2">
+              <div className="relative flex-1">
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                  placeholder="Search messages..."
+                  className="input-field w-full pl-8"
+                  autoFocus
+                />
+                <FiSearch className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+              </div>
+              
+              {searchResults.length > 0 && (
+                <div className="flex items-center space-x-2">
+                  <span className="text-sm text-gray-500">
+                    {selectedResultIndex + 1} of {searchResults.length}
+                  </span>
+                  <div className="flex">
+                    <button
+                      className="btn-icon"
+                      onClick={() => navigateSearch('up')}
+                      title="Previous result"
+                    >
+                      <FiChevronUp />
+                    </button>
+                    <button
+                      className="btn-icon"
+                      onClick={() => navigateSearch('down')}
+                      title="Next result"
+                    >
+                      <FiChevronDown />
+                    </button>
+                  </div>
+                </div>
+              )}
+              
+              <button
+                className="btn-icon"
+                onClick={() => {
+                  setShowSearch(false);
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                title="Close search"
+              >
+                <FiX />
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* Users sidebar */}
       <AnimatePresence>
@@ -660,13 +779,19 @@ const ChatRoom = () => {
                 (msg.username === currentUser.username) ||
                 (msg.user?.username === currentUser.username);
               
+              const isHighlighted = searchResults.length > 0 && 
+                selectedResultIndex >= 0 && 
+                searchResults[selectedResultIndex].message.id === msg.id;
+              
               return (
                 <motion.div
                   key={msg.id || index}
+                  id={`message-${msg.id}`}
                   variants={messageVariants}
                   initial="hidden"
                   animate="visible"
-                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} group`}
+                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} group
+                    ${isHighlighted ? 'bg-yellow-50 dark:bg-yellow-900/20 -mx-4 px-4 py-2 rounded-lg' : ''}`}
                 >
                   {!isCurrentUser && (
                     <img
