@@ -517,6 +517,36 @@ const ChatRoom = () => {
     }
   };
   
+  // Group messages by user and time
+  const groupMessages = (messages) => {
+    return messages.reduce((groups, message, index) => {
+      const prevMessage = messages[index - 1];
+      
+      // Check if this message should be grouped with the previous one
+      const shouldGroup = prevMessage && 
+        // Same user
+        prevMessage.userId === message.userId &&
+        // Within 2 minutes
+        (new Date(message.timestamp).getTime() - new Date(prevMessage.timestamp).getTime() < 120000);
+      
+      if (shouldGroup) {
+        // Add to the last group
+        const lastGroup = groups[groups.length - 1];
+        lastGroup.messages.push(message);
+        return groups;
+      } else {
+        // Start a new group
+        groups.push({
+          id: message.id,
+          userId: message.userId,
+          user: message.user,
+          messages: [message]
+        });
+        return groups;
+      }
+    }, []);
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -768,149 +798,164 @@ const ChatRoom = () => {
           </div>
         ) : (
           <div className="space-y-4 p-4">
-            {roomMessages.map((msg, index) => {
-              // Check if message is from current user - use multiple checks for reliability
+            {groupMessages(roomMessages).map((group) => {
               const isCurrentUser = 
                 // Check by userId
-                msg.userId === currentUser.id ||
+                group.userId === currentUser.id ||
                 // Check by the sender object
-                (msg.user?.id === currentUser.id) ||
+                (group.user?.id === currentUser.id) ||
                 // Check by username as fallback
-                (msg.username === currentUser.username) ||
-                (msg.user?.username === currentUser.username);
-              
-              const isHighlighted = searchResults.length > 0 && 
-                selectedResultIndex >= 0 && 
-                searchResults[selectedResultIndex].message.id === msg.id;
+                (group.user?.username === currentUser.username);
               
               return (
-                <motion.div
-                  key={msg.id || index}
-                  id={`message-${msg.id}`}
-                  variants={messageVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'} group
-                    ${isHighlighted ? 'bg-yellow-50 dark:bg-yellow-900/20 -mx-4 px-4 py-2 rounded-lg' : ''}`}
-                >
+                <div key={group.id} className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
                   {!isCurrentUser && (
                     <img
-                      src={msg.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.user?.username || 'User')}&background=random`}
-                      alt={msg.user?.username || 'User'}
-                      className="h-8 w-8 rounded-full mr-2 self-end"
+                      src={group.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(group.user?.username || 'User')}&background=random`}
+                      alt={group.user?.username || 'User'}
+                      className="h-8 w-8 rounded-full mr-2 self-start sticky top-0"
                     />
                   )}
                   
                   <div className="max-w-xs space-y-1">
                     {!isCurrentUser && (
                       <div className="text-xs text-gray-500 dark:text-gray-400 ml-1">
-                        {msg.user?.username || 'User'}
+                        {group.user?.username || 'User'}
                       </div>
                     )}
                     
-                    <motion.div
-                      drag="x"
-                      dragConstraints={{ left: 0, right: 0 }}
-                      onDragEnd={(e, { offset }) => {
-                        if (Math.abs(offset.x) > 50) {
-                          setSwipedMessageId(msg.id);
-                        }
-                      }}
-                      className="relative"
-                    >
-                      <div className={`${isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'} 
-                        p-3 rounded-lg max-w-xs break-words relative
-                        ${isCurrentUser ? 
-                          'bg-primary-500 text-white ml-auto rounded-br-none' : 
-                          'bg-gray-100 dark:bg-gray-800 rounded-bl-none'
-                        }
-                        hover:shadow-md transition-shadow duration-200
-                      `}>
-                        <motion.div
-                          variants={bubbleVariants}
-                          whileHover="hover"
-                          whileTap="tap"
-                        >
-                          {formatMessageText(msg.text)}
-                        </motion.div>
-                        <div 
-                          className={`absolute bottom-0 ${isCurrentUser ? 'right-0 transform translate-x-2' : 'left-0 transform -translate-x-2'} 
-                            w-4 h-4 ${isCurrentUser ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-800'}
-                          `} 
-                          style={{
-                            clipPath: isCurrentUser ? 
-                              'polygon(0 0, 100% 0, 100% 100%)' : 
-                              'polygon(0 0, 100% 0, 0 100%)'
-                          }}
-                        />
-                      </div>
-                      
-                      {/* Message actions */}
-                      {swipedMessageId === msg.id && (
-                        <motion.div 
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
-                          className={`absolute ${isCurrentUser ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} 
-                            top-0 flex items-center space-x-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1`}
-                        >
-                          <button
-                            className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
-                            onClick={() => {
-                              handleCopyMessage(msg.text);
-                              setSwipedMessageId(null);
-                            }}
-                            title="Copy message"
+                    <div className="space-y-1">
+                      {group.messages.map((msg, msgIndex) => {
+                        const isHighlighted = searchResults.length > 0 && 
+                          selectedResultIndex >= 0 && 
+                          searchResults[selectedResultIndex].message.id === msg.id;
+                        
+                        const isFirstInGroup = msgIndex === 0;
+                        const isLastInGroup = msgIndex === group.messages.length - 1;
+                        
+                        return (
+                          <motion.div
+                            key={msg.id}
+                            id={`message-${msg.id}`}
+                            variants={messageVariants}
+                            initial="hidden"
+                            animate="visible"
+                            className={`group ${isHighlighted ? 'bg-yellow-50 dark:bg-yellow-900/20 -mx-4 px-4 py-2 rounded-lg' : ''}`}
                           >
-                            <FiCopy size={16} />
-                          </button>
-                          <button
-                            className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
-                            onClick={() => {
-                              handleReplyToMessage(msg);
-                              setSwipedMessageId(null);
-                            }}
-                            title="Reply to message"
-                          >
-                            <FiReply size={16} />
-                          </button>
-                          {isCurrentUser && (
-                            <>
-                              <button
-                                className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
-                                onClick={() => {
-                                  handleEditMessage(msg);
-                                  setSwipedMessageId(null);
-                                }}
-                                title="Edit message"
+                            <motion.div
+                              drag="x"
+                              dragConstraints={{ left: 0, right: 0 }}
+                              onDragEnd={(e, { offset }) => {
+                                if (Math.abs(offset.x) > 50) {
+                                  setSwipedMessageId(msg.id);
+                                }
+                              }}
+                              className="relative"
+                            >
+                              <div 
+                                className={`
+                                  p-3 break-words relative
+                                  ${isCurrentUser ? 'bg-primary-500 text-white ml-auto' : 'bg-gray-100 dark:bg-gray-800'}
+                                  ${isFirstInGroup ? (isCurrentUser ? 'rounded-tr-lg' : 'rounded-tl-lg') : ''}
+                                  ${isLastInGroup ? (isCurrentUser ? 'rounded-br-none' : 'rounded-bl-none') : ''}
+                                  rounded-lg
+                                  hover:shadow-md transition-shadow duration-200
+                                `}
                               >
-                                <FiEdit size={16} />
-                              </button>
-                              <button
-                                className="btn-icon text-red-500 hover:text-red-600"
-                                onClick={() => {
-                                  handleDeleteMessage(msg);
-                                  setSwipedMessageId(null);
-                                }}
-                                title="Delete message"
-                              >
-                                <FiTrash2 size={16} />
-                              </button>
-                            </>
-                          )}
-                        </motion.div>
-                      )}
-                    </motion.div>
-                    
-                    {renderReactions(msg)}
-                    
-                    <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
-                      {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
-                      <span className="mx-1">•</span>
-                      <span title={new Date(msg.timestamp).toLocaleString()}>
-                        {format(new Date(msg.timestamp), 'h:mm a')}
-                      </span>
-                      {isCurrentUser && <span className="ml-1 text-green-500">✓</span>}
+                                <motion.div
+                                  variants={bubbleVariants}
+                                  whileHover="hover"
+                                  whileTap="tap"
+                                >
+                                  {formatMessageText(msg.text)}
+                                </motion.div>
+                                
+                                {isLastInGroup && (
+                                  <div 
+                                    className={`absolute bottom-0 ${isCurrentUser ? 'right-0 transform translate-x-2' : 'left-0 transform -translate-x-2'} 
+                                      w-4 h-4 ${isCurrentUser ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-800'}
+                                    `} 
+                                    style={{
+                                      clipPath: isCurrentUser ? 
+                                        'polygon(0 0, 100% 0, 100% 100%)' : 
+                                        'polygon(0 0, 100% 0, 0 100%)'
+                                    }}
+                                  />
+                                )}
+                              </div>
+                              
+                              {/* Message actions */}
+                              {swipedMessageId === msg.id && (
+                                <motion.div 
+                                  initial={{ opacity: 0, scale: 0.9 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.9 }}
+                                  className={`absolute ${isCurrentUser ? 'left-0 -translate-x-full' : 'right-0 translate-x-full'} 
+                                    top-0 flex items-center space-x-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg p-1`}
+                                >
+                                  <button
+                                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                                    onClick={() => {
+                                      handleCopyMessage(msg.text);
+                                      setSwipedMessageId(null);
+                                    }}
+                                    title="Copy message"
+                                  >
+                                    <FiCopy size={16} />
+                                  </button>
+                                  <button
+                                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                                    onClick={() => {
+                                      handleReplyToMessage(msg);
+                                      setSwipedMessageId(null);
+                                    }}
+                                    title="Reply to message"
+                                  >
+                                    <FiReply size={16} />
+                                  </button>
+                                  {isCurrentUser && (
+                                    <>
+                                      <button
+                                        className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                                        onClick={() => {
+                                          handleEditMessage(msg);
+                                          setSwipedMessageId(null);
+                                        }}
+                                        title="Edit message"
+                                      >
+                                        <FiEdit size={16} />
+                                      </button>
+                                      <button
+                                        className="btn-icon text-red-500 hover:text-red-600"
+                                        onClick={() => {
+                                          handleDeleteMessage(msg);
+                                          setSwipedMessageId(null);
+                                        }}
+                                        title="Delete message"
+                                      >
+                                        <FiTrash2 size={16} />
+                                      </button>
+                                    </>
+                                  )}
+                                </motion.div>
+                              )}
+                            </motion.div>
+                            
+                            {renderReactions(msg)}
+                            
+                            {isLastInGroup && (
+                              <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
+                                {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
+                                <span className="mx-1">•</span>
+                                <span title={new Date(msg.timestamp).toLocaleString()}>
+                                  {format(new Date(msg.timestamp), 'h:mm a')}
+                                </span>
+                                {isCurrentUser && <span className="ml-1 text-green-500">✓</span>}
+                              </div>
+                            )}
+                          </motion.div>
+                        );
+                      })}
                     </div>
                   </div>
                   
@@ -918,10 +963,10 @@ const ChatRoom = () => {
                     <img
                       src={currentUser.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentUser.username)}&background=random`}
                       alt={currentUser.username}
-                      className="h-8 w-8 rounded-full ml-2 self-end"
+                      className="h-8 w-8 rounded-full ml-2 self-start sticky top-0"
                     />
                   )}
-                </motion.div>
+                </div>
               );
             })}
             
