@@ -38,6 +38,8 @@ const ChatRoom = () => {
   const [isSending, setIsSending] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
   const [showReactions, setShowReactions] = useState(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -105,8 +107,33 @@ const ChatRoom = () => {
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
+    if (autoScroll) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [roomMessages, autoScroll]);
+  
+  // Check if we need to show the scroll button
+  useEffect(() => {
+    const chatMessages = document.querySelector('.chat-messages');
+    if (!chatMessages) return;
+    
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatMessages;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      
+      setAutoScroll(isNearBottom);
+      setShowScrollButton(!isNearBottom);
+    };
+    
+    chatMessages.addEventListener('scroll', handleScroll);
+    return () => chatMessages.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Scroll to bottom when clicking the scroll button
+  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [roomMessages]);
+    setAutoScroll(true);
+  };
   
   // Get current room information
   useEffect(() => {
@@ -713,6 +740,17 @@ const ChatRoom = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+            
+            {/* Scroll to bottom button */}
+            {showScrollButton && (
+              <button
+                className="fixed bottom-24 right-4 bg-primary-500 text-white p-2 rounded-full shadow-lg hover:bg-primary-600 transition-colors"
+                onClick={scrollToBottom}
+                title="Scroll to bottom"
+              >
+                <FiChevronDown size={20} />
+              </button>
+            )}
             
             {/* Auto-scroll anchor */}
             <div ref={messagesEndRef} />
