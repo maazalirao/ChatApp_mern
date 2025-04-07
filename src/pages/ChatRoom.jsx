@@ -249,6 +249,11 @@ const ChatRoom = () => {
     visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
   };
   
+  const bubbleVariants = {
+    tap: { scale: 0.98 },
+    hover: { scale: 1.02 }
+  };
+  
   // Apply text formatting
   const applyFormatting = (type) => {
     const input = messageInputRef.current;
@@ -646,8 +651,33 @@ const ChatRoom = () => {
                       </div>
                     )}
                     
-                    <div className={isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'}>
-                      {formatMessageText(msg.text)}
+                    <div 
+                      className={`${isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'} 
+                        p-3 rounded-lg max-w-xs break-words relative
+                        ${isCurrentUser ? 
+                          'bg-primary-500 text-white ml-auto rounded-br-none' : 
+                          'bg-gray-100 dark:bg-gray-800 rounded-bl-none'
+                        }
+                        hover:shadow-md transition-shadow duration-200
+                      `}
+                    >
+                      <motion.div
+                        variants={bubbleVariants}
+                        whileHover="hover"
+                        whileTap="tap"
+                      >
+                        {formatMessageText(msg.text)}
+                      </motion.div>
+                      <div 
+                        className={`absolute bottom-0 ${isCurrentUser ? 'right-0 transform translate-x-2' : 'left-0 transform -translate-x-2'} 
+                          w-4 h-4 ${isCurrentUser ? 'bg-primary-500' : 'bg-gray-100 dark:bg-gray-800'}
+                        `} 
+                        style={{
+                          clipPath: isCurrentUser ? 
+                            'polygon(0 0, 100% 0, 100% 100%)' : 
+                            'polygon(0 0, 100% 0, 0 100%)'
+                        }}
+                      />
                     </div>
                     
                     {renderReactions(msg)}
