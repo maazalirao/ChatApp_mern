@@ -213,6 +213,33 @@ const ChatRoom = () => {
     visible: { opacity: 1, y: 0, transition: { duration: 0.3 } }
   };
   
+  // Format message text with clickable links
+  const formatMessageText = (text) => {
+    // URL regex pattern
+    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
+    
+    // Split text by URLs
+    const parts = text.split(urlPattern);
+    
+    return parts.map((part, index) => {
+      // Check if part is a URL
+      if (part.match(urlPattern)) {
+        return (
+          <a 
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline"
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -428,7 +455,7 @@ const ChatRoom = () => {
                     )}
                     
                     <div className={isCurrentUser ? 'message-bubble-sent' : 'message-bubble-received'}>
-                      {msg.text}
+                      {formatMessageText(msg.text)}
                     </div>
                     
                     <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
