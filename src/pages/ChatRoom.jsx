@@ -17,7 +17,11 @@ import {
   FiTrash2,
   FiBold,
   FiItalic,
-  FiUnderline
+  FiUnderline,
+  FiThumbsUp,
+  FiHeart,
+  FiLaugh,
+  FiFrown
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -33,6 +37,7 @@ const ChatRoom = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSending, setIsSending] = useState(false);
   const [showFormatting, setShowFormatting] = useState(false);
+  const [showReactions, setShowReactions] = useState(null);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -287,6 +292,119 @@ const ChatRoom = () => {
     return renderFormattedText(text);
   };
   
+  // Handle adding a reaction to a message
+  const handleAddReaction = (messageId, reaction) => {
+    // In a real app, this would send the reaction to the server
+    console.log(`Adding reaction ${reaction} to message ${messageId}`);
+    
+    // For demo purposes, we'll just update the local state
+    setRoomMessages(prevMessages => 
+      prevMessages.map(msg => {
+        if (msg.id === messageId) {
+          // Initialize reactions if they don't exist
+          if (!msg.reactions) {
+            msg.reactions = {};
+          }
+          
+          // Initialize this reaction if it doesn't exist
+          if (!msg.reactions[reaction]) {
+            msg.reactions[reaction] = [];
+          }
+          
+          // Add the current user to the reaction if not already there
+          if (!msg.reactions[reaction].includes(currentUser.id)) {
+            msg.reactions[reaction].push(currentUser.id);
+          }
+          
+          return { ...msg };
+        }
+        return msg;
+      })
+    );
+    
+    // Close the reactions menu
+    setShowReactions(null);
+  };
+  
+  // Handle removing a reaction from a message
+  const handleRemoveReaction = (messageId, reaction) => {
+    // In a real app, this would send the removal to the server
+    console.log(`Removing reaction ${reaction} from message ${messageId}`);
+    
+    // For demo purposes, we'll just update the local state
+    setRoomMessages(prevMessages => 
+      prevMessages.map(msg => {
+        if (msg.id === messageId && msg.reactions && msg.reactions[reaction]) {
+          // Remove the current user from the reaction
+          msg.reactions[reaction] = msg.reactions[reaction].filter(id => id !== currentUser.id);
+          
+          // If no one reacted with this emoji, remove it
+          if (msg.reactions[reaction].length === 0) {
+            delete msg.reactions[reaction];
+          }
+          
+          return { ...msg };
+        }
+        return msg;
+      })
+    );
+  };
+  
+  // Check if the current user has reacted with a specific emoji
+  const hasReacted = (message, reaction) => {
+    return message.reactions && 
+           message.reactions[reaction] && 
+           message.reactions[reaction].includes(currentUser.id);
+  };
+  
+  // Get reaction count for a specific emoji
+  const getReactionCount = (message, reaction) => {
+    return message.reactions && message.reactions[reaction] ? message.reactions[reaction].length : 0;
+  };
+  
+  // Render reactions for a message
+  const renderReactions = (message) => {
+    if (!message.reactions || Object.keys(message.reactions).length === 0) {
+      return null;
+    }
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {Object.entries(message.reactions).map(([reaction, userIds]) => (
+          <button
+            key={reaction}
+            className={`flex items-center px-1.5 py-0.5 rounded-full text-xs ${
+              hasReacted(message, reaction) 
+                ? 'bg-primary-100 text-primary-600 dark:bg-primary-900 dark:text-primary-300' 
+                : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+            }`}
+            onClick={() => hasReacted(message, reaction) 
+              ? handleRemoveReaction(message.id, reaction)
+              : handleAddReaction(message.id, reaction)
+            }
+            title={userIds.map(id => {
+              const user = users.find(u => u.id === id);
+              return user ? user.username : 'Unknown user';
+            }).join(', ')}
+          >
+            {getReactionEmoji(reaction)} {userIds.length}
+          </button>
+        ))}
+      </div>
+    );
+  };
+  
+  // Get emoji for reaction type
+  const getReactionEmoji = (reaction) => {
+    switch (reaction) {
+      case 'thumbsup': return '👍';
+      case 'heart': return '❤️';
+      case 'laugh': return '😂';
+      case 'sad': return '😢';
+      default: return reaction;
+    }
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -505,6 +623,8 @@ const ChatRoom = () => {
                       {formatMessageText(msg.text)}
                     </div>
                     
+                    {renderReactions(msg)}
+                    
                     <div className={`text-xs text-gray-400 ${isCurrentUser ? 'text-right' : 'text-left'}`}>
                       {formatDistanceToNow(new Date(msg.timestamp), { addSuffix: true })}
                       <span className="mx-1">•</span>
@@ -525,6 +645,50 @@ const ChatRoom = () => {
                 </motion.div>
               );
             })}
+            
+            {/* Add reaction button */}
+            <div className="flex justify-center mt-2">
+              <button
+                className="btn-icon text-gray-500 dark:text-gray-400"
+                onClick={() => setShowReactions(showReactions === null ? 'new' : null)}
+                title="Add reaction"
+              >
+                <FiSmile />
+              </button>
+              
+              {showReactions === 'new' && (
+                <div className="absolute bottom-full mb-2 bg-white dark:bg-gray-800 rounded-md shadow-lg p-2 flex space-x-1">
+                  <button
+                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                    onClick={() => handleAddReaction('new', 'thumbsup')}
+                    title="👍 Thumbs up"
+                  >
+                    👍
+                  </button>
+                  <button
+                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                    onClick={() => handleAddReaction('new', 'heart')}
+                    title="❤️ Heart"
+                  >
+                    ❤️
+                  </button>
+                  <button
+                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                    onClick={() => handleAddReaction('new', 'laugh')}
+                    title="😂 Laugh"
+                  >
+                    😂
+                  </button>
+                  <button
+                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                    onClick={() => handleAddReaction('new', 'sad')}
+                    title="😢 Sad"
+                  >
+                    😢
+                  </button>
+                </div>
+              )}
+            </div>
             
             {/* Typing indicator */}
             <AnimatePresence>
