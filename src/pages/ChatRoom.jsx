@@ -439,7 +439,7 @@ const ChatRoom = () => {
         <div className="flex items-center">
           <button 
             onClick={() => navigate('/')}
-            className="btn-icon mr-2"
+            className="btn-icon mr-2 md:hidden"
             aria-label="Back to dashboard"
             title="Back to dashboard"
           >
@@ -455,11 +455,11 @@ const ChatRoom = () => {
             </div>
             
             <div>
-              <h2 className="font-bold">{roomInfo?.name || 'Chat Room'}</h2>
+              <h2 className="font-bold truncate max-w-[150px] md:max-w-none">{roomInfo?.name || 'Chat Room'}</h2>
               <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
                 <span>{roomInfo?.users?.length || 0} online</span>
                 {typingUsers.filter(u => u.roomId === roomId).length > 0 && (
-                  <span className="ml-2 animate-pulse text-gray-400">• Someone is typing...</span>
+                  <span className="ml-2 animate-pulse text-gray-400 hidden md:inline">• Someone is typing...</span>
                 )}
               </div>
             </div>
@@ -552,13 +552,13 @@ const ChatRoom = () => {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 250, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            className="fixed inset-y-0 right-0 bg-white dark:bg-gray-800 shadow-lg z-30 overflow-hidden"
+            className="fixed inset-y-0 right-0 bg-white dark:bg-gray-800 shadow-lg z-30 overflow-hidden md:relative md:shadow-none"
           >
             <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
               <h3 className="font-bold">Room Participants</h3>
               <button 
                 onClick={() => setShowUsersList(false)}
-                className="btn-icon"
+                className="btn-icon md:hidden"
                 aria-label="Close users list"
                 title="Close participants list"
               >
@@ -601,7 +601,7 @@ const ChatRoom = () => {
             <p className="mt-4 text-gray-500 dark:text-gray-400">Loading messages...</p>
           </div>
         ) : roomMessages.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 text-center">
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 dark:text-gray-500 text-center p-4">
             <div className="h-20 w-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
               <FiMessageCircle size={40} />
             </div>
@@ -611,7 +611,7 @@ const ChatRoom = () => {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4 p-4">
             {roomMessages.map((msg, index) => {
               // Check if message is from current user - use multiple checks for reliability
               const isCurrentUser = 
@@ -760,7 +760,7 @@ const ChatRoom = () => {
       
       {/* Chat input */}
       <div className="chat-input-container">
-        <form onSubmit={handleSendMessage} className="flex items-center space-x-2">
+        <form onSubmit={handleSendMessage} className="flex items-center space-x-2 p-4">
           <div className="relative">
             <button
               type="button"
