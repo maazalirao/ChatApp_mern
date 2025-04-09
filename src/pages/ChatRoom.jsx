@@ -1,5 +1,5 @@
 // ChatRoom component for real-time messaging
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -45,12 +45,17 @@ import {
   FiUpload,
   FiAtSign,
   FiCornerUpRight,
-  FiPin
+  FiPin,
+  FiPieChart,
+  FiBarChart2
 } from 'react-icons/fi';
+import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
+import { RiGifLine } from "react-icons/ri";
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
+import { debounce } from 'lodash';
 
 const ChatRoom = () => {
   const [message, setMessage] = useState('');
@@ -97,6 +102,15 @@ const ChatRoom = () => {
   const [threadMessages, setThreadMessages] = useState([]);
   const [pinnedMessages, setPinnedMessages] = useState([]);
   const [showPinnedMessages, setShowPinnedMessages] = useState(true);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearchQuery, setGifSearchQuery] = useState("");
+  const [gifResults, setGifResults] = useState([]);
+  const [isSearchingGifs, setIsSearchingGifs] = useState(false);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [activePolls, setActivePolls] = useState([]);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -1017,7 +1031,186 @@ const ChatRoom = () => {
       </div>
     );
   };
+
+  // Function to search for GIFs using the Giphy API
+  const searchGifs = useCallback(debounce(async (query) => {
+    if (!query) {
+      setGifResults([]);
+      setIsSearchingGifs(false);
+      return;
+    }
+    
+    setIsSearchingGifs(true);
+    try {
+      // Using the public Giphy API key - in production, this should be on the server
+      const response = await fetch(
+        `https://api.giphy.com/v1/gifs/search?api_key=P30aJbiNV5N3m5bGBAW2I9oCcNxJsSLa&q=${encodeURIComponent(
+          query
+        )}&limit=20&offset=0&rating=g&lang=en`
+      );
+      const data = await response.json();
+      setGifResults(data.data || []);
+    } catch (error) {
+      console.error("Error searching for GIFs:", error);
+    } finally {
+      setIsSearchingGifs(false);
+    }
+  }, 500), []);
+
+  // Handle GIF search input change
+  const handleGifSearchChange = (e) => {
+    const query = e.target.value;
+    setGifSearchQuery(query);
+    searchGifs(query);
+  };
+
+  // Handle selecting a GIF to send
+  const handleGifSelect = (gif) => {
+    const gifMessage = {
+      type: "gif",
+      gif: {
+        url: gif.images.fixed_height.url,
+        width: gif.images.fixed_height.width,
+        height: gif.images.fixed_height.height,
+        title: gif.title
+      },
+      text: `Sent a GIF: ${gif.title}`
+    };
+    
+    sendMessage(gifMessage);
+    setShowGifPicker(false);
+    setGifSearchQuery("");
+    setGifResults([]);
+  };
+
+  // Function to render a GIF message
+  const renderGifMessage = (msg) => {
+    return (
+      <div className="gif-message">
+        <img 
+          src={msg.gif.url} 
+          alt={msg.gif.title || "GIF"} 
+          className="rounded-md max-w-[250px] max-h-[200px] cursor-pointer"
+          onClick={() => window.open(msg.gif.url, '_blank')}
+        />
+        {msg.gif.title && (
+          <p className="text-xs text-gray-500 mt-1">{msg.gif.title}</p>
+        )}
+      </div>
+    );
+  };
+
+  // Load polls when entering room
+  useEffect(() => {
+    if (socket) {
+      socket.on('room_polls', (polls) => {
+        setActivePolls(polls);
+      });
+      
+      socket.on('poll_vote', ({pollId, results}) => {
+        setActivePolls(prev => prev.map(poll => 
+          poll.id === pollId ? {...poll, results} : poll
+        ));
+      });
+      
+      socket.on('new_poll', (poll) => {
+        setActivePolls(prev => [...prev, poll]);
+      });
+    }
+    
+    return () => {
+      if (socket) {
+        socket.off('room_polls');
+        socket.off('poll_vote');
+        socket.off('new_poll');
+      }
+    };
+  }, [socket]);
+
+  const handleCreatePoll = () => {
+    if (pollQuestion.trim() && pollOptions.filter(opt => opt.trim()).length >= 2) {
+      const filteredOptions = pollOptions.filter(opt => opt.trim());
+      socket.emit('create_poll', {
+        roomId,
+        question: pollQuestion,
+        options: filteredOptions,
+      });
+      setPollQuestion('');
+      setPollOptions(['', '']);
+      setShowPollCreator(false);
+    }
+  };
+
+  const handleVote = (pollId, optionIndex) => {
+    socket.emit('vote_poll', {
+      roomId,
+      pollId,
+      optionIndex,
+      userId: currentUser.id
+    });
+  };
+
+  const addPollOption = () => {
+    if (pollOptions.length < 5) {
+      setPollOptions([...pollOptions, '']);
+    }
+  };
+
+  const removePollOption = (index) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter((_, i) => i !== index));
+    }
+  };
   
+  const renderMessageContent = (msg) => {
+    if (msg.type === 'poll') {
+      return (
+        <div className="poll-container bg-gray-100 dark:bg-gray-700 p-3 rounded-md">
+          <h4 className="font-medium text-black dark:text-white">{msg.content.question}</h4>
+          <div className="poll-options mt-2">
+            {msg.content.options.map((option, idx) => {
+              const voteCount = msg.content.results?.[idx] || 0;
+              const totalVotes = msg.content.results ? Object.values(msg.content.results).reduce((a, b) => a + b, 0) : 0;
+              const percentage = totalVotes ? Math.round((voteCount / totalVotes) * 100) : 0;
+              const hasVoted = msg.content.voted?.includes(currentUser.id);
+              
+              return (
+                <div key={idx} className="poll-option my-1">
+                  <button
+                    onClick={() => !hasVoted && handleVote(msg.id, idx)}
+                    disabled={hasVoted}
+                    className={`w-full text-left p-2 rounded-md flex items-center ${
+                      hasVoted ? 'bg-gray-200 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                  >
+                    <span className="flex-grow">{option}</span>
+                    {hasVoted && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        {voteCount} · {percentage}%
+                      </span>
+                    )}
+                  </button>
+                  {hasVoted && (
+                    <div className="h-1 bg-gray-300 dark:bg-gray-500 mt-1 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500" 
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              {msg.content.results ? Object.values(msg.content.results).reduce((a, b) => a + b, 0) : 0} votes
+            </div>
+          </div>
+        </div>
+      );
+    }
+    // ... existing code ...
+  };
+
   return (
     <div 
       className="chat-container"
@@ -1454,6 +1647,8 @@ const ChatRoom = () => {
                                   {msg.type === 'voice' ? 
                                     renderVoiceMessage(msg) : 
                                     msg.type === 'file' ? renderFileMessage(msg) : 
+                                    msg.type === 'gif' ? renderGifMessage(msg) : 
+                                    msg.type === 'poll' ? renderMessageContent(msg) : 
                                     formatMessageWithMentions(msg.text)}
                                 </motion.div>
                                 
@@ -1815,6 +2010,133 @@ const ChatRoom = () => {
             <FiPin className="text-primary-500" size={14} />
             <span className="text-xs">{pinnedMessages.length}</span>
           </button>
+        </div>
+      )}
+      
+      {/* GIF Picker */}
+      {showGifPicker && (
+        <div className="absolute bottom-16 left-0 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg p-3 w-full max-w-md">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="text-sm font-medium">Search GIFs</h3>
+            <button
+              onClick={() => setShowGifPicker(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+          
+          <div className="mb-3">
+            <input
+              type="text"
+              value={gifSearchQuery}
+              onChange={handleGifSearchChange}
+              placeholder="Search for GIFs..."
+              className="w-full px-3 py-2 border rounded-md dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          
+          {isSearchingGifs ? (
+            <div className="flex justify-center py-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
+            </div>
+          ) : gifResults.length > 0 ? (
+            <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto">
+              {gifResults.map((gif) => (
+                <div
+                  key={gif.id}
+                  onClick={() => handleGifSelect(gif)}
+                  className="cursor-pointer hover:opacity-80 transition-opacity rounded overflow-hidden"
+                >
+                  <img
+                    src={gif.images.fixed_height_small.url}
+                    alt={gif.title}
+                    className="w-full h-24 object-cover"
+                  />
+                </div>
+              ))}
+            </div>
+          ) : gifSearchQuery ? (
+            <p className="text-center text-gray-500 py-4">No GIFs found. Try another search.</p>
+          ) : (
+            <p className="text-center text-gray-500 py-4">Type to search for GIFs</p>
+          )}
+        </div>
+      )}
+      
+      {/* Add poll creator modal */}
+      {showPollCreator && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-5 w-full max-w-md">
+            <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-white">Create Poll</h3>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Question
+              </label>
+              <input
+                type="text"
+                value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+                className="w-full p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+                placeholder="Ask a question..."
+              />
+            </div>
+            
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Options
+              </label>
+              {pollOptions.map((option, index) => (
+                <div key={index} className="flex mb-2">
+                  <input
+                    type="text"
+                    value={option}
+                    onChange={(e) => {
+                      const newOptions = [...pollOptions];
+                      newOptions[index] = e.target.value;
+                      setPollOptions(newOptions);
+                    }}
+                    className="flex-grow p-2 border rounded-md dark:bg-gray-700 dark:border-gray-600"
+                    placeholder={`Option ${index + 1}`}
+                  />
+                  {pollOptions.length > 2 && (
+                    <button
+                      onClick={() => removePollOption(index)}
+                      className="ml-2 p-2 text-red-500"
+                    >
+                      &times;
+                    </button>
+                  )}
+                </div>
+              ))}
+              
+              {pollOptions.length < 5 && (
+                <button
+                  onClick={addPollOption}
+                  className="text-blue-500 text-sm mt-1"
+                >
+                  + Add Option
+                </button>
+              )}
+            </div>
+            
+            <div className="flex justify-end space-x-2">
+              <button
+                onClick={() => setShowPollCreator(false)}
+                className="px-4 py-2 text-gray-700 bg-gray-200 rounded-md dark:bg-gray-700 dark:text-gray-300"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreatePoll}
+                className="px-4 py-2 text-white bg-blue-500 rounded-md disabled:opacity-50"
+                disabled={!pollQuestion.trim() || pollOptions.filter(opt => opt.trim()).length < 2}
+              >
+                Create Poll
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
