@@ -36,7 +36,13 @@ import {
   FiStopCircle,
   FiClock,
   FiAlertCircle,
-  FiMinus
+  FiMinus,
+  FiPaperclip,
+  FiFile,
+  FiImage,
+  FiDownload,
+  FiMaximize,
+  FiUpload
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -74,6 +80,10 @@ const ChatRoom = () => {
   const [playingAudio, setPlayingAudio] = useState(null);
   const [userStatus, setUserStatus] = useState(localStorage.getItem('userStatus') || 'online');
   const [showStatusPicker, setShowStatusPicker] = useState(false);
+  const [isDraggingFile, setIsDraggingFile] = useState(false);
+  const [files, setFiles] = useState({});
+  const [fileUploading, setFileUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -881,8 +891,255 @@ const ChatRoom = () => {
     );
   };
   
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const selectedFiles = e.target.files;
+    if (selectedFiles.length > 0) {
+      processFiles(selectedFiles);
+    }
+  };
+  
+  // Handle drag events
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(true);
+  };
+  
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+  };
+  
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFile(false);
+    
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles.length > 0) {
+      processFiles(droppedFiles);
+    }
+  };
+  
+  // Process uploaded files
+  const processFiles = (fileList) => {
+    setFileUploading(true);
+    setUploadProgress(0);
+    
+    // Simulate upload progress
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        if (prev >= 95) {
+          clearInterval(progressInterval);
+          return prev;
+        }
+        return prev + 5;
+      });
+    }, 100);
+    
+    // Array to store file promises
+    const filePromises = [];
+    
+    // Process each file
+    Array.from(fileList).forEach(file => {
+      const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Create a promise to read the file
+      const filePromise = new Promise((resolve) => {
+        const reader = new FileReader();
+        
+        reader.onload = () => {
+          // For images, store the data URL for preview
+          const isImage = file.type.startsWith('image/');
+          
+          // Store file info
+          setFiles(prev => ({
+            ...prev,
+            [fileId]: {
+              id: fileId,
+              name: file.name,
+              type: file.type,
+              size: file.size,
+              url: isImage ? reader.result : null,
+              blob: file
+            }
+          }));
+          
+          resolve(fileId);
+        };
+        
+        // Read as data URL for images, or just complete for other files
+        if (file.type.startsWith('image/')) {
+          reader.readAsDataURL(file);
+        } else {
+          // For non-images, just complete without reading the file content
+          reader.onload();
+        }
+      });
+      
+      filePromises.push(filePromise);
+    });
+    
+    // When all files are processed, send file messages
+    Promise.all(filePromises).then(fileIds => {
+      // Complete upload progress
+      setUploadProgress(100);
+      
+      // Send file messages
+      fileIds.forEach(fileId => {
+        sendFileMessage(fileId);
+      });
+      
+      // Reset upload state
+      setTimeout(() => {
+        setFileUploading(false);
+        setUploadProgress(0);
+      }, 500);
+    });
+  };
+  
+  // Send file message
+  const sendFileMessage = (fileId) => {
+    const file = files[fileId];
+    if (!file) return;
+    
+    // Create file message
+    const fileMessage = {
+      id: `file-msg-${Date.now()}`,
+      roomId,
+      userId: currentUser.id,
+      user: currentUser,
+      timestamp: new Date().toISOString(),
+      type: 'file',
+      fileId,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size
+    };
+    
+    // Add to messages
+    setRoomMessages(prev => [...prev, fileMessage]);
+    
+    // Play the send sound
+    messageSound.current?.play().catch(err => console.log('Cannot play sound'));
+  };
+  
+  // Download file
+  const downloadFile = (fileId) => {
+    const file = files[fileId];
+    if (!file) return;
+    
+    // Create a download link
+    const link = document.createElement('a');
+    
+    // For images that have URL, use that
+    if (file.url) {
+      link.href = file.url;
+    } else {
+      // For other files, create a URL from the blob
+      link.href = URL.createObjectURL(file.blob);
+    }
+    
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+  
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+    else if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB';
+    else return (bytes / 1073741824).toFixed(1) + ' GB';
+  };
+  
+  // Render file message
+  const renderFileMessage = (message) => {
+    const fileId = message.fileId;
+    const file = files[fileId];
+    
+    if (!file) {
+      return <div className="text-sm text-gray-500">File unavailable</div>;
+    }
+    
+    const isImage = file.type.startsWith('image/');
+    
+    if (isImage && file.url) {
+      return (
+        <div className="file-message">
+          <div className="relative group">
+            <img 
+              src={file.url} 
+              alt={file.name}
+              className="max-w-full rounded-lg max-h-64 object-contain bg-gray-50 dark:bg-gray-800"
+            />
+            
+            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+              <button
+                onClick={() => downloadFile(fileId)}
+                className="p-2 bg-white rounded-full text-gray-800 mx-1 hover:bg-gray-100"
+                title="Download image"
+              >
+                <FiDownload size={18} />
+              </button>
+              
+              <button
+                onClick={() => window.open(file.url, '_blank')}
+                className="p-2 bg-white rounded-full text-gray-800 mx-1 hover:bg-gray-100"
+                title="View full size"
+              >
+                <FiMaximize size={18} />
+              </button>
+            </div>
+          </div>
+          
+          <div className="text-xs text-gray-500 mt-1 flex items-center">
+            <FiImage className="mr-1" />
+            <span>{file.name} ({formatFileSize(file.size)})</span>
+          </div>
+        </div>
+      );
+    } else {
+      // For non-image files
+      return (
+        <div className="file-message p-3 rounded-lg bg-gray-50 dark:bg-gray-700 flex items-center">
+          <div className="h-10 w-10 flex-shrink-0 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400 mr-3">
+            <FiFile size={20} />
+          </div>
+          
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-medium truncate">{file.name}</div>
+            <div className="text-xs text-gray-500">{formatFileSize(file.size)}</div>
+          </div>
+          
+          <button
+            onClick={() => downloadFile(fileId)}
+            className="ml-2 p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            title="Download file"
+          >
+            <FiDownload size={18} />
+          </button>
+        </div>
+      );
+    }
+  };
+  
   return (
-    <div className="chat-container">
+    <div 
+      className="chat-container"
+      onDragEnter={handleDragEnter}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Chat header */}
       <div className="chat-header">
         <div className="flex items-center">
@@ -1309,6 +1566,7 @@ const ChatRoom = () => {
                                 >
                                   {msg.type === 'voice' ? 
                                     renderVoiceMessage(msg) : 
+                                    msg.type === 'file' ? renderFileMessage(msg) : 
                                     formatMessageText(msg.text)}
                                 </motion.div>
                                 
@@ -1554,60 +1812,22 @@ const ChatRoom = () => {
             <FiSmile />
           </button>
           
-          {isRecording ? (
-            <div className="flex items-center space-x-2 flex-1 bg-red-50 dark:bg-red-900/20 rounded-lg p-2">
-              <div className="flex items-center space-x-2">
-                <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse"></div>
-                <span className="text-red-500 font-medium">Recording {formatDuration(recordingDuration)}</span>
-              </div>
-              <div className="flex-1"></div>
-              <button
-                type="button"
-                className="btn-icon text-gray-500 dark:text-gray-400"
-                onClick={cancelRecording}
-                title="Cancel recording"
-              >
-                <FiX />
-              </button>
-              <button
-                type="button"
-                className="btn-icon text-red-500"
-                onClick={stopRecording}
-                title="Stop recording"
-              >
-                <FiStopCircle />
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="flex-1 relative">
-                <input
-                  type="text"
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  ref={messageInputRef}
-                  placeholder="Write something nice..."
-                  className="input-field w-full"
-                  autoFocus
-                  title="Type your message here (Press Enter to send)"
-                  maxLength={500}
-                />
-                <div className="absolute right-2 bottom-1 text-xs text-gray-400">
-                  {message.length}/500
-                </div>
-              </div>
-              
-              <button
-                type="button"
-                className="btn-icon text-gray-500 dark:text-gray-400"
-                onClick={startRecording}
-                title="Record voice message"
-              >
-                <FiMic />
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            className="btn-icon text-gray-500 dark:text-gray-400"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach file"
+          >
+            <FiPaperclip />
+          </button>
+          
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileSelect}
+            className="hidden"
+            multiple
+          />
           
           {!isRecording && (
             <button
