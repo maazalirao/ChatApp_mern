@@ -26,7 +26,10 @@ import {
   FiReply,
   FiEdit,
   FiSearch,
-  FiChevronUp
+  FiChevronUp,
+  FiSun,
+  FiMoon,
+  FiSettings
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -55,6 +58,9 @@ const ChatRoom = () => {
   const [showReactionPicker, setShowReactionPicker] = useState(false);
   const [reactionMessage, setReactionMessage] = useState(null);
   const [reactions, setReactions] = useState({});
+  const [themeColor, setThemeColor] = useState(localStorage.getItem('themeColor') || 'indigo');
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('darkMode') === 'true' || false);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -76,6 +82,42 @@ const ChatRoom = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   const messageInputRef = useRef(null);
+  
+  // Available theme colors
+  const themeColors = [
+    { name: 'indigo', primary: '#6366f1', dark: '#4338ca', light: '#e0e7ff' },
+    { name: 'violet', primary: '#8b5cf6', dark: '#6d28d9', light: '#ede9fe' },
+    { name: 'pink', primary: '#ec4899', dark: '#be185d', light: '#fce7f3' },
+    { name: 'blue', primary: '#3b82f6', dark: '#1d4ed8', light: '#dbeafe' },
+    { name: 'green', primary: '#10b981', dark: '#047857', light: '#d1fae5' },
+    { name: 'red', primary: '#ef4444', dark: '#b91c1c', light: '#fee2e2' },
+    { name: 'amber', primary: '#f59e0b', dark: '#b45309', light: '#fef3c7' },
+    { name: 'teal', primary: '#14b8a6', dark: '#0f766e', light: '#ccfbf1' },
+  ];
+  
+  // Apply theme color to CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--color-primary-500', themeColors.find(c => c.name === themeColor)?.primary || '#6366f1');
+    document.documentElement.style.setProperty('--color-primary-700', themeColors.find(c => c.name === themeColor)?.dark || '#4338ca');
+    document.documentElement.style.setProperty('--color-primary-100', themeColors.find(c => c.name === themeColor)?.light || '#e0e7ff');
+    localStorage.setItem('themeColor', themeColor);
+  }, [themeColor]);
+  
+  // Handle dark mode toggle
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('darkMode', isDarkMode);
+  }, [isDarkMode]);
+  
+  // Toggle theme settings
+  const toggleThemeSettings = () => {
+    setShowThemeSettings(!showThemeSettings);
+    setShowMenu(false);
+  };
   
   // Join the room when component mounts
   useEffect(() => {
@@ -253,8 +295,8 @@ const ChatRoom = () => {
   // Handle leaving the room
   const handleLeaveRoom = () => {
     if (window.confirm('Are you sure you want to leave this room?')) {
-      leaveRoom(roomId);
-      navigate('/');
+    leaveRoom(roomId);
+    navigate('/');
     }
   };
 
@@ -595,6 +637,15 @@ const ChatRoom = () => {
             <FiUsers />
           </button>
           
+          <button 
+            className="btn-icon mr-1"
+            onClick={toggleThemeSettings}
+            aria-label="Theme settings"
+            title="Theme settings"
+          >
+            <FiSettings size={18} />
+          </button>
+          
           <div className="relative">
             <button 
               className="btn-icon"
@@ -774,6 +825,61 @@ const ChatRoom = () => {
         )}
       </AnimatePresence>
       
+      {/* Theme settings panel */}
+      <AnimatePresence>
+        {showThemeSettings && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+          >
+            <div className="p-3">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="font-medium">Theme Settings</h3>
+                <button className="btn-icon" onClick={() => setShowThemeSettings(false)}>
+                  <FiX size={18} />
+                </button>
+              </div>
+              
+              <div className="flex items-center justify-between mb-3">
+                <span>Dark Mode</span>
+                <button 
+                  onClick={() => setIsDarkMode(!isDarkMode)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                    isDarkMode ? 'bg-primary-500' : 'bg-gray-300 dark:bg-gray-600'
+                  }`}
+                >
+                  <span className="sr-only">Toggle dark mode</span>
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isDarkMode ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  ></span>
+                </button>
+              </div>
+              
+              <div>
+                <span className="block mb-2">Theme Color</span>
+                <div className="grid grid-cols-4 gap-2">
+                  {themeColors.map(color => (
+                    <button
+                      key={color.name}
+                      className={`w-full h-8 rounded-md border ${
+                        themeColor === color.name ? 'ring-2 ring-offset-2 ring-offset-white dark:ring-offset-gray-800 ring-black dark:ring-white' : ''
+                      }`}
+                      style={{ backgroundColor: color.primary }}
+                      onClick={() => setThemeColor(color.name)}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
       {/* Chat messages */}
       <div className="chat-messages">
         {isLoading ? (
@@ -877,8 +983,8 @@ const ChatRoom = () => {
                                     }}
                                   />
                                 )}
-                              </div>
-                              
+                    </div>
+                    
                               {/* Message actions */}
                               {swipedMessageId === msg.id && (
                                 <motion.div 
@@ -1108,18 +1214,18 @@ const ChatRoom = () => {
           </button>
           
           <div className="flex-1 relative">
-            <input
-              type="text"
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
               onKeyDown={handleKeyDown}
-              ref={messageInputRef}
+            ref={messageInputRef}
               placeholder="Write something nice..."
               className="input-field w-full"
-              autoFocus
+            autoFocus
               title="Type your message here (Press Enter to send)"
               maxLength={500}
-            />
+          />
             <div className="absolute right-2 bottom-1 text-xs text-gray-400">
               {message.length}/500
             </div>
