@@ -29,7 +29,11 @@ import {
   FiChevronUp,
   FiSun,
   FiMoon,
-  FiSettings
+  FiSettings,
+  FiMic,
+  FiPlay,
+  FiPause,
+  FiStopCircle
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -61,6 +65,10 @@ const ChatRoom = () => {
   const [themeColor, setThemeColor] = useState(localStorage.getItem('themeColor') || 'indigo');
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(localStorage.getItem('darkMode') === 'true' || false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [recordings, setRecordings] = useState({});
+  const [playingAudio, setPlayingAudio] = useState(null);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -82,6 +90,22 @@ const ChatRoom = () => {
   const navigate = useNavigate();
   const messagesEndRef = useRef(null);
   const messageInputRef = useRef(null);
+  
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const recordingTimerRef = useRef(null);
+  const audioPlayerRef = useRef(null);
+  
+  // Initialize audio context for visualizations
+  const audioContextRef = useRef(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return () => {
+      audioContextRef.current?.close();
+    };
+  }, []);
   
   // Available theme colors
   const themeColors = [
@@ -584,6 +608,209 @@ const ChatRoom = () => {
     }, []);
   };
   
+  // Start voice recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      mediaRecorderRef.current = new MediaRecorder(stream);
+      audioChunksRef.current = [];
+      
+      mediaRecorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+      
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Generate a unique ID for this recording
+        const recordingId = `recording-${Date.now()}`;
+        
+        // Store the recording
+        setRecordings(prev => ({
+          ...prev,
+          [recordingId]: {
+            url: audioUrl,
+            duration: recordingDuration,
+            blob: audioBlob
+          }
+        }));
+        
+        // Reset recording duration
+        setRecordingDuration(0);
+        
+        // Send the voice message
+        sendVoiceMessage(recordingId, audioBlob);
+        
+        // Stop all tracks in the stream
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      // Start recording
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      
+      // Start timer for recording duration
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Unable to access microphone. Please check your browser permissions.');
+    }
+  };
+  
+  // Stop voice recording
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      // Clear the duration timer
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+  
+  // Cancel voice recording
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      // Clear the duration timer
+      clearInterval(recordingTimerRef.current);
+      
+      // Clear audio chunks
+      audioChunksRef.current = [];
+      
+      // Reset recording duration
+      setRecordingDuration(0);
+    }
+  };
+  
+  // Send voice message
+  const sendVoiceMessage = async (recordingId, audioBlob) => {
+    setIsSending(true);
+    
+    try {
+      // In a real app, you would upload the audio blob to your server
+      // For demo purposes, we'll create a local URL and add it to messages
+      
+      // Create a new message with voice recording
+      const voiceMessage = {
+        id: `voice-${Date.now()}`,
+        roomId,
+        userId: currentUser.id,
+        user: currentUser,
+        timestamp: new Date().toISOString(),
+        type: 'voice',
+        recording: recordingId,
+        duration: recordingDuration
+      };
+      
+      // Add to messages (this would typically be handled by the socket in a real app)
+      setRoomMessages(prev => [...prev, voiceMessage]);
+      
+      // Play the send sound
+      messageSound.current?.play().catch(err => console.log('Cannot play sound'));
+      
+      // Reset sending state after a short delay
+      setTimeout(() => setIsSending(false), 300);
+    } catch (error) {
+      console.error('Error sending voice message:', error);
+      alert(`Failed to send voice message: ${error.message}`);
+      setIsSending(false);
+    }
+  };
+  
+  // Format recording duration
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+  
+  // Play/pause audio
+  const toggleAudio = (recordingId) => {
+    if (playingAudio === recordingId) {
+      // Pause the currently playing audio
+      audioPlayerRef.current?.pause();
+      setPlayingAudio(null);
+    } else {
+      // Stop any currently playing audio
+      audioPlayerRef.current?.pause();
+      
+      // Play the new audio
+      audioPlayerRef.current = new Audio(recordings[recordingId]?.url);
+      audioPlayerRef.current.play();
+      setPlayingAudio(recordingId);
+      
+      // Listen for when audio ends
+      audioPlayerRef.current.onended = () => {
+        setPlayingAudio(null);
+      };
+    }
+  };
+  
+  // Clean up audio URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      // Revoke all object URLs to avoid memory leaks
+      Object.values(recordings).forEach(recording => {
+        if (recording.url) {
+          URL.revokeObjectURL(recording.url);
+        }
+      });
+      
+      // Stop any playing audio
+      audioPlayerRef.current?.pause();
+      
+      // Stop any active recording
+      if (isRecording) {
+        cancelRecording();
+      }
+    };
+  }, [recordings, isRecording]);
+  
+  // Render voice message
+  const renderVoiceMessage = (message) => {
+    const recordingId = message.recording;
+    const recording = recordings[recordingId];
+    
+    if (!recording) {
+      return <div className="text-sm text-gray-500">Voice message unavailable</div>;
+    }
+    
+    return (
+      <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700">
+        <button
+          onClick={() => toggleAudio(recordingId)}
+          className="h-8 w-8 rounded-full flex items-center justify-center bg-primary-500 text-white"
+        >
+          {playingAudio === recordingId ? <FiPause /> : <FiPlay />}
+        </button>
+        
+        <div className="flex-1">
+          <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-primary-500"
+              style={{ 
+                width: playingAudio === recordingId ? 
+                  `${(audioPlayerRef.current?.currentTime / audioPlayerRef.current?.duration) * 100}%` : 
+                  '0%'
+              }}
+            ></div>
+          </div>
+        </div>
+        
+        <div className="text-xs text-gray-500">{formatDuration(recording.duration)}</div>
+      </div>
+    );
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -968,7 +1195,9 @@ const ChatRoom = () => {
                                   whileHover="hover"
                                   whileTap="tap"
                                 >
-                                  {formatMessageText(msg.text)}
+                                  {msg.type === 'voice' ? 
+                                    renderVoiceMessage(msg) : 
+                                    formatMessageText(msg.text)}
                                 </motion.div>
                                 
                                 {isLastInGroup && (
@@ -983,8 +1212,8 @@ const ChatRoom = () => {
                                     }}
                                   />
                                 )}
-                    </div>
-                    
+                              </div>
+                              
                               {/* Message actions */}
                               {swipedMessageId === msg.id && (
                                 <motion.div 
@@ -1213,33 +1442,72 @@ const ChatRoom = () => {
             <FiSmile />
           </button>
           
-          <div className="flex-1 relative">
-          <input
-            type="text"
-            value={message}
-            onChange={(e) => setMessage(e.target.value)}
-              onKeyDown={handleKeyDown}
-            ref={messageInputRef}
-              placeholder="Write something nice..."
-              className="input-field w-full"
-            autoFocus
-              title="Type your message here (Press Enter to send)"
-              maxLength={500}
-          />
-            <div className="absolute right-2 bottom-1 text-xs text-gray-400">
-              {message.length}/500
+          {isRecording ? (
+            <div className="flex items-center space-x-2 flex-1 bg-red-50 dark:bg-red-900/20 rounded-lg p-2">
+              <div className="flex items-center space-x-2">
+                <div className="h-3 w-3 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-red-500 font-medium">Recording {formatDuration(recordingDuration)}</span>
+              </div>
+              <div className="flex-1"></div>
+              <button
+                type="button"
+                className="btn-icon text-gray-500 dark:text-gray-400"
+                onClick={cancelRecording}
+                title="Cancel recording"
+              >
+                <FiX />
+              </button>
+              <button
+                type="button"
+                className="btn-icon text-red-500"
+                onClick={stopRecording}
+                title="Stop recording"
+              >
+                <FiStopCircle />
+              </button>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="flex-1 relative">
+                <input
+                  type="text"
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  ref={messageInputRef}
+                  placeholder="Write something nice..."
+                  className="input-field w-full"
+                  autoFocus
+                  title="Type your message here (Press Enter to send)"
+                  maxLength={500}
+                />
+                <div className="absolute right-2 bottom-1 text-xs text-gray-400">
+                  {message.length}/500
+                </div>
+              </div>
+              
+              <button
+                type="button"
+                className="btn-icon text-gray-500 dark:text-gray-400"
+                onClick={startRecording}
+                title="Record voice message"
+              >
+                <FiMic />
+              </button>
+            </>
+          )}
           
-          <button
-            type="submit"
-            className={`btn-primary p-2 rounded-full flex items-center justify-center ${isSending ? 'animate-pulse' : ''}`}
-            disabled={!message.trim() || isSending}
-            aria-label="Send message"
-            title="Send message"
-          >
-            <FiSend size={18} />
-          </button>
+          {!isRecording && (
+            <button
+              type="submit"
+              className={`btn-primary p-2 rounded-full flex items-center justify-center ${isSending ? 'animate-pulse' : ''}`}
+              disabled={!message.trim() || isSending}
+              aria-label="Send message"
+              title="Send message"
+            >
+              <FiSend size={18} />
+            </button>
+          )}
         </form>
       </div>
       
