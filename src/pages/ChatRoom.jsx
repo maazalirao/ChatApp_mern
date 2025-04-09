@@ -1,5 +1,5 @@
 // ChatRoom component for real-time messaging
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { formatDistanceToNow, format } from 'date-fns';
@@ -42,7 +42,8 @@ import {
   FiImage,
   FiDownload,
   FiMaximize,
-  FiUpload
+  FiUpload,
+  FiAtSign
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -84,6 +85,10 @@ const ChatRoom = () => {
   const [files, setFiles] = useState({});
   const [fileUploading, setFileUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [mentionSearch, setMentionSearch] = useState('');
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [cursorPosition, setCursorPosition] = useState(0);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -280,7 +285,171 @@ const ChatRoom = () => {
     setTypingTimeout(timeout);
   };
   
-  // Handle sending a message
+  // Check if text contains @mentions and get the current mention search
+  const checkForMentions = (text, cursorPos) => {
+    // Find the @ character before the cursor position
+    const beforeCursor = text.substring(0, cursorPos);
+    const atIndex = beforeCursor.lastIndexOf('@');
+    
+    if (atIndex !== -1 && (atIndex === 0 || beforeCursor[atIndex - 1] === ' ')) {
+      // Get the text between @ and cursor
+      const searchText = beforeCursor.substring(atIndex + 1);
+      
+      // Check if search text contains a space (mention completed)
+      if (!searchText.includes(' ')) {
+        setMentionSearch(searchText.toLowerCase());
+        setShowMentions(true);
+        return;
+      }
+    }
+    
+    // No valid mention search
+    setShowMentions(false);
+    setMentionSearch('');
+  };
+  
+  // Filter users for mentioning
+  const filteredUsers = useMemo(() => {
+    if (!mentionSearch) return roomInfo?.users || [];
+    
+    return (roomInfo?.users || []).filter(user => 
+      user.username.toLowerCase().includes(mentionSearch.toLowerCase())
+    );
+  }, [mentionSearch, roomInfo?.users]);
+  
+  // Handle input change with mention detection
+  const handleInputChange = (e) => {
+    const newValue = e.target.value;
+    setMessage(newValue);
+    
+    // Save cursor position
+    const cursorPos = e.target.selectionStart;
+    setCursorPosition(cursorPos);
+    
+    // Check for @mentions
+    checkForMentions(newValue, cursorPos);
+  };
+  
+  // Handle mention selection with keyboard
+  const handleMentionKeyDown = (e) => {
+    if (!showMentions) return;
+    
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setMentionIndex(prev => (prev + 1) % filteredUsers.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setMentionIndex(prev => (prev - 1 + filteredUsers.length) % filteredUsers.length);
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      insertMention(filteredUsers[mentionIndex]);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setShowMentions(false);
+    }
+  };
+  
+  // Add the selected mention to the message
+  const insertMention = (user) => {
+    if (!user) return;
+    
+    const beforeCursor = message.substring(0, cursorPosition);
+    const afterCursor = message.substring(cursorPosition);
+    
+    // Find the @ character before the cursor
+    const atIndex = beforeCursor.lastIndexOf('@');
+    
+    if (atIndex !== -1) {
+      // Replace from @ to cursor with @username
+      const newMessage = 
+        beforeCursor.substring(0, atIndex) + 
+        `@${user.username} ` + 
+        afterCursor;
+      
+      setMessage(newMessage);
+      
+      // Update cursor position after the inserted mention
+      const newCursorPos = atIndex + user.username.length + 2; // +2 for @ and space
+      
+      // Focus and set cursor position after a small delay
+      setTimeout(() => {
+        if (messageInputRef.current) {
+          messageInputRef.current.focus();
+          messageInputRef.current.setSelectionRange(newCursorPos, newCursorPos);
+        }
+      }, 0);
+    }
+    
+    // Hide mentions dropdown
+    setShowMentions(false);
+  };
+  
+  // Format message text with mentions highlighted
+  const formatMessageWithMentions = (text) => {
+    if (!text) return null;
+    
+    // Regular expression to find @mentions
+    const mentionRegex = /@(\w+)/g;
+    
+    // Split the text by mentions
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    
+    while ((match = mentionRegex.exec(text)) !== null) {
+      // Add text before the match
+      if (match.index > lastIndex) {
+        parts.push({
+          type: 'text',
+          content: text.substring(lastIndex, match.index)
+        });
+      }
+      
+      // Add the mention
+      parts.push({
+        type: 'mention',
+        username: match[1],
+        raw: match[0]
+      });
+      
+      lastIndex = match.index + match[0].length;
+    }
+    
+    // Add remaining text
+    if (lastIndex < text.length) {
+      parts.push({
+        type: 'text',
+        content: text.substring(lastIndex)
+      });
+    }
+    
+    // Render parts
+    return (
+      <>
+        {parts.map((part, index) => {
+          if (part.type === 'text') {
+            return <span key={index}>{part.content}</span>;
+          } else if (part.type === 'mention') {
+            const mentionedUser = roomInfo?.users?.find(
+              user => user.username.toLowerCase() === part.username.toLowerCase()
+            );
+            
+            return (
+              <span 
+                key={index}
+                className="bg-primary-100 text-primary-800 dark:bg-primary-900 dark:text-primary-200 px-1 rounded"
+              >
+                {part.raw}
+              </span>
+            );
+          }
+          return null;
+        })}
+      </>
+    );
+  };
+  
+  // Handle sending a message with mentions
   const handleSendMessage = (e) => {
     e.preventDefault();
     
@@ -298,8 +467,32 @@ const ChatRoom = () => {
     try {
       console.log(`Sending message to room ${roomId}: "${message}"`);
       console.log('Message sent at:', new Date().toISOString());
-      // Send message
-      sendMessage(roomId, message.trim());
+      
+      // Extract mentions for notifications
+      const mentionRegex = /@(\w+)/g;
+      const mentions = [];
+      let match;
+      
+      while ((match = mentionRegex.exec(message)) !== null) {
+        const username = match[1];
+        const mentionedUser = roomInfo?.users?.find(
+          user => user.username.toLowerCase() === username.toLowerCase()
+        );
+        
+        if (mentionedUser && mentionedUser.id !== currentUser.id) {
+          mentions.push(mentionedUser.id);
+        }
+      }
+      
+      // If there are mentions, include them in the message data
+      const messageWithMentions = {
+        roomId,
+        text: message.trim(),
+        mentions: mentions.length > 0 ? mentions : undefined
+      };
+      
+      // Send message with mentions
+      sendMessage(roomId, message.trim(), mentions);
       
       // Play sound effect
       messageSound.current?.play().catch(err => console.log('Cannot play sound'));
@@ -1567,7 +1760,7 @@ const ChatRoom = () => {
                                   {msg.type === 'voice' ? 
                                     renderVoiceMessage(msg) : 
                                     msg.type === 'file' ? renderFileMessage(msg) : 
-                                    formatMessageText(msg.text)}
+                                    formatMessageWithMentions(msg.text)}
                                 </motion.div>
                                 
                                 {isLastInGroup && (
@@ -1759,8 +1952,36 @@ const ChatRoom = () => {
         )}
       </div>
       
-      {/* Chat input */}
-      <div className="chat-input-container">
+      {/* Chat input with mention dropdown */}
+      <div className="chat-input-container relative">
+        {/* Mention dropdown */}
+        {showMentions && filteredUsers.length > 0 && (
+          <div className="absolute bottom-full left-4 mb-2 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 max-h-60 overflow-y-auto">
+            <div className="py-1">
+              {filteredUsers.map((user, index) => (
+                <button
+                  key={user.id}
+                  className={`flex w-full items-center px-4 py-2 text-sm text-left ${
+                    index === mentionIndex 
+                      ? 'bg-primary-100 dark:bg-primary-900 text-primary-800 dark:text-primary-200' 
+                      : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  }`}
+                  onClick={() => insertMention(user)}
+                >
+                  <div className="flex items-center">
+                    <img
+                      src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                      alt={user.username}
+                      className="h-6 w-6 rounded-full mr-2"
+                    />
+                    <span>{user.username}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
         <form onSubmit={handleSendMessage} className="flex items-center space-x-2 p-4">
           <div className="relative">
             <button
