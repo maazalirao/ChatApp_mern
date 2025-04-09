@@ -275,17 +275,74 @@ const ChatRoom = () => {
     };
   }, [showMenu, showUsersList]);
   
-  // Handle typing indicator
+  // Enhanced typing indicator renderer
+  const renderTypingIndicator = () => {
+    const typingUsersInRoom = typingUsers.filter(u => u.roomId === roomId);
+    if (typingUsersInRoom.length === 0) return null;
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 10 }}
+        className="flex items-start space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 max-w-xs"
+      >
+        <div className="flex -space-x-2">
+          {typingUsersInRoom.slice(0, 3).map(user => {
+            const userObj = roomInfo?.users?.find(u => u.id === user.id);
+            return (
+              <div key={user.id} className="relative">
+                <img
+                  src={userObj?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                  alt={user.username}
+                  className="h-6 w-6 rounded-full border-2 border-white dark:border-gray-800"
+                />
+                <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border border-white dark:border-gray-800"></div>
+              </div>
+            );
+          })}
+        </div>
+        
+        <div className="flex flex-col items-start">
+          <div className="flex space-x-1 items-center">
+            <div className="flex space-x-0.5">
+              <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
+              <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
+              <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            </div>
+          </div>
+          
+          <div className="text-xs text-gray-500 dark:text-gray-400 italic">
+            {typingUsersInRoom.length === 1 ? (
+              <span>{typingUsersInRoom[0].username} is typing...</span>
+            ) : typingUsersInRoom.length === 2 ? (
+              <span>{typingUsersInRoom[0].username} and {typingUsersInRoom[1].username} are typing...</span>
+            ) : (
+              <span>Multiple people are typing...</span>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    );
+  };
+  
+  // Enhanced typing status handling
   const handleTyping = () => {
-    clearTimeout(typingTimeout);
+    if (!isTyping) {
+      setIsTyping(true);
+      sendTypingStatus(roomId, true);
+    }
     
-    // Send typing status
-    sendTypingStatus(roomId, true);
+    // Clear existing timeout
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
     
-    // Set timeout to clear typing status after 2 seconds of inactivity
+    // Set new timeout to stop typing status after inactivity
     const timeout = setTimeout(() => {
+      setIsTyping(false);
       sendTypingStatus(roomId, false);
-    }, 2000);
+    }, 3000);
     
     setTypingTimeout(timeout);
   };
@@ -1460,26 +1517,7 @@ const ChatRoom = () => {
             
             {/* Typing indicator */}
             <AnimatePresence>
-              {typingUsers.filter(u => u.roomId === roomId).length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="flex items-center space-x-2 text-gray-500 dark:text-gray-400"
-                >
-                  <div className="flex space-x-1">
-                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-                    <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
-                  </div>
-                  <span className="text-sm italic">
-                    {typingUsers
-                      .filter(u => u.roomId === roomId)
-                      .map(u => u.username)
-                      .join(', ')} is typing...
-                  </span>
-                </motion.div>
-              )}
+              {typingUsers.filter(u => u.roomId === roomId).length > 0 && renderTypingIndicator()}
             </AnimatePresence>
             
             {/* Scroll to bottom button */}
