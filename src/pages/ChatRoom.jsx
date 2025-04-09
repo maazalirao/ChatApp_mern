@@ -43,7 +43,8 @@ import {
   FiDownload,
   FiMaximize,
   FiUpload,
-  FiAtSign
+  FiAtSign,
+  FiCornerUpRight
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -89,6 +90,10 @@ const ChatRoom = () => {
   const [showMentions, setShowMentions] = useState(false);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [cursorPosition, setCursorPosition] = useState(0);
+  const [replyToMessage, setReplyToMessage] = useState(null);
+  const [showThread, setShowThread] = useState(false);
+  const [activeThread, setActiveThread] = useState(null);
+  const [threadMessages, setThreadMessages] = useState([]);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -449,7 +454,21 @@ const ChatRoom = () => {
     );
   };
   
-  // Handle sending a message with mentions
+  // Start a reply to a message
+  const startReply = (msg) => {
+    setReplyToMessage(msg);
+    // Focus the input field
+    setTimeout(() => {
+      messageInputRef.current?.focus();
+    }, 0);
+  };
+  
+  // Cancel reply
+  const cancelReply = () => {
+    setReplyToMessage(null);
+  };
+  
+  // Modify the handleSendMessage function to handle replies
   const handleSendMessage = (e) => {
     e.preventDefault();
     
@@ -468,37 +487,27 @@ const ChatRoom = () => {
       console.log(`Sending message to room ${roomId}: "${message}"`);
       console.log('Message sent at:', new Date().toISOString());
       
-      // Extract mentions for notifications
-      const mentionRegex = /@(\w+)/g;
-      const mentions = [];
-      let match;
-      
-      while ((match = mentionRegex.exec(message)) !== null) {
-        const username = match[1];
-        const mentionedUser = roomInfo?.users?.find(
-          user => user.username.toLowerCase() === username.toLowerCase()
-        );
-        
-        if (mentionedUser && mentionedUser.id !== currentUser.id) {
-          mentions.push(mentionedUser.id);
-        }
-      }
-      
-      // If there are mentions, include them in the message data
-      const messageWithMentions = {
-        roomId,
+      // Add reply information if replying to a message
+      const messageData = {
         text: message.trim(),
-        mentions: mentions.length > 0 ? mentions : undefined
+        roomId,
+        replyTo: replyToMessage ? {
+          id: replyToMessage.id,
+          text: replyToMessage.text?.substring(0, 50) || 'Message',
+          userId: replyToMessage.userId,
+          username: replyToMessage.user?.username || 'User'
+        } : null
       };
       
-      // Send message with mentions
-      sendMessage(roomId, message.trim(), mentions);
+      // Send message
+      sendMessage(roomId, message.trim());
       
       // Play sound effect
       messageSound.current?.play().catch(err => console.log('Cannot play sound'));
       
-      // Clear input
+      // Clear input and reply state
       setMessage('');
+      setReplyToMessage(null);
       
       // Clear typing status
       sendTypingStatus(roomId, false);
@@ -513,6 +522,19 @@ const ChatRoom = () => {
       // Show error toast to user
       alert(`Failed to send message: ${error.message}`);
     }
+  };
+  
+  // Render the reply preview for a message
+  const renderReplyPreview = (msg) => {
+    if (!msg.replyTo) return null;
+    
+    return (
+      <div className="mb-1 px-2 py-1 bg-gray-100 dark:bg-gray-800 border-l-2 border-primary-500 rounded text-xs text-gray-500 dark:text-gray-400 flex items-center space-x-1">
+        <FiCornerUpRight size={12} />
+        <span className="font-medium">{msg.replyTo.username}</span>
+        <span className="truncate">{msg.replyTo.text}</span>
+      </div>
+    );
   };
   
   // Handle keyboard shortcuts
@@ -720,482 +742,6 @@ const ChatRoom = () => {
   const handleCopyMessage = (text) => {
     navigator.clipboard.writeText(text);
     // Could show a toast notification here
-  };
-  
-  const handleReplyToMessage = (msg) => {
-    setMessage(`> ${msg.user?.username || 'User'}: ${msg.text}\n\n`);
-    messageInputRef.current?.focus();
-  };
-  
-  const handleEditMessage = (msg) => {
-    if (msg.userId === currentUser.id) {
-      setMessage(msg.text);
-      messageInputRef.current?.focus();
-      // In a real app, you'd want to mark this as an edit
-    }
-  };
-  
-  const handleDeleteMessage = (msg) => {
-    if (msg.userId === currentUser.id) {
-      if (window.confirm('Are you sure you want to delete this message?')) {
-        setRoomMessages(prev => prev.filter(m => m.id !== msg.id));
-        // In a real app, you'd want to send this to the server
-      }
-    }
-  };
-  
-  // Handle search
-  const handleSearch = (query) => {
-    setSearchQuery(query);
-    
-    if (!query.trim()) {
-      setSearchResults([]);
-      setSelectedResultIndex(-1);
-      return;
-    }
-    
-    // Search through messages
-    const results = roomMessages.reduce((acc, msg, index) => {
-      if (msg.text.toLowerCase().includes(query.toLowerCase())) {
-        acc.push({ index, message: msg });
-      }
-      return acc;
-    }, []);
-    
-    setSearchResults(results);
-    setSelectedResultIndex(results.length - 1);
-  };
-  
-  // Navigate search results
-  const navigateSearch = (direction) => {
-    if (searchResults.length === 0) return;
-    
-    let newIndex;
-    if (direction === 'up') {
-      newIndex = selectedResultIndex > 0 ? selectedResultIndex - 1 : searchResults.length - 1;
-    } else {
-      newIndex = selectedResultIndex < searchResults.length - 1 ? selectedResultIndex + 1 : 0;
-    }
-    
-    setSelectedResultIndex(newIndex);
-    
-    // Scroll to the selected message
-    const messageElement = document.getElementById(`message-${searchResults[newIndex].message.id}`);
-    if (messageElement) {
-      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }
-  };
-  
-  // Group messages by user and time
-  const groupMessages = (messages) => {
-    return messages.reduce((groups, message, index) => {
-      const prevMessage = messages[index - 1];
-      
-      // Check if this message should be grouped with the previous one
-      const shouldGroup = prevMessage && 
-        // Same user
-        prevMessage.userId === message.userId &&
-        // Within 2 minutes
-        (new Date(message.timestamp).getTime() - new Date(prevMessage.timestamp).getTime() < 120000);
-      
-      if (shouldGroup) {
-        // Add to the last group
-        const lastGroup = groups[groups.length - 1];
-        lastGroup.messages.push(message);
-        return groups;
-      } else {
-        // Start a new group
-        groups.push({
-          id: message.id,
-          userId: message.userId,
-          user: message.user,
-          messages: [message]
-        });
-        return groups;
-      }
-    }, []);
-  };
-  
-  // Start voice recording
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      mediaRecorderRef.current = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-      
-      mediaRecorderRef.current.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        const audioUrl = URL.createObjectURL(audioBlob);
-        
-        // Generate a unique ID for this recording
-        const recordingId = `recording-${Date.now()}`;
-        
-        // Store the recording
-        setRecordings(prev => ({
-          ...prev,
-          [recordingId]: {
-            url: audioUrl,
-            duration: recordingDuration,
-            blob: audioBlob
-          }
-        }));
-        
-        // Reset recording duration
-        setRecordingDuration(0);
-        
-        // Send the voice message
-        sendVoiceMessage(recordingId, audioBlob);
-        
-        // Stop all tracks in the stream
-        stream.getTracks().forEach(track => track.stop());
-      };
-      
-      // Start recording
-      mediaRecorderRef.current.start();
-      setIsRecording(true);
-      
-      // Start timer for recording duration
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration(prev => prev + 1);
-      }, 1000);
-    } catch (error) {
-      console.error('Error starting recording:', error);
-      alert('Unable to access microphone. Please check your browser permissions.');
-    }
-  };
-  
-  // Stop voice recording
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Clear the duration timer
-      clearInterval(recordingTimerRef.current);
-    }
-  };
-  
-  // Cancel voice recording
-  const cancelRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      
-      // Clear the duration timer
-      clearInterval(recordingTimerRef.current);
-      
-      // Clear audio chunks
-      audioChunksRef.current = [];
-      
-      // Reset recording duration
-      setRecordingDuration(0);
-    }
-  };
-  
-  // Send voice message
-  const sendVoiceMessage = async (recordingId, audioBlob) => {
-    setIsSending(true);
-    
-    try {
-      // In a real app, you would upload the audio blob to your server
-      // For demo purposes, we'll create a local URL and add it to messages
-      
-      // Create a new message with voice recording
-      const voiceMessage = {
-        id: `voice-${Date.now()}`,
-        roomId,
-        userId: currentUser.id,
-        user: currentUser,
-        timestamp: new Date().toISOString(),
-        type: 'voice',
-        recording: recordingId,
-        duration: recordingDuration
-      };
-      
-      // Add to messages (this would typically be handled by the socket in a real app)
-      setRoomMessages(prev => [...prev, voiceMessage]);
-      
-      // Play the send sound
-      messageSound.current?.play().catch(err => console.log('Cannot play sound'));
-      
-      // Reset sending state after a short delay
-      setTimeout(() => setIsSending(false), 300);
-    } catch (error) {
-      console.error('Error sending voice message:', error);
-      alert(`Failed to send voice message: ${error.message}`);
-      setIsSending(false);
-    }
-  };
-  
-  // Format recording duration
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  // Play/pause audio
-  const toggleAudio = (recordingId) => {
-    if (playingAudio === recordingId) {
-      // Pause the currently playing audio
-      audioPlayerRef.current?.pause();
-      setPlayingAudio(null);
-    } else {
-      // Stop any currently playing audio
-      audioPlayerRef.current?.pause();
-      
-      // Play the new audio
-      audioPlayerRef.current = new Audio(recordings[recordingId]?.url);
-      audioPlayerRef.current.play();
-      setPlayingAudio(recordingId);
-      
-      // Listen for when audio ends
-      audioPlayerRef.current.onended = () => {
-        setPlayingAudio(null);
-      };
-    }
-  };
-  
-  // Clean up audio URLs when component unmounts
-  useEffect(() => {
-    return () => {
-      // Revoke all object URLs to avoid memory leaks
-      Object.values(recordings).forEach(recording => {
-        if (recording.url) {
-          URL.revokeObjectURL(recording.url);
-        }
-      });
-      
-      // Stop any playing audio
-      audioPlayerRef.current?.pause();
-      
-      // Stop any active recording
-      if (isRecording) {
-        cancelRecording();
-      }
-    };
-  }, [recordings, isRecording]);
-  
-  // Render voice message
-  const renderVoiceMessage = (message) => {
-    const recordingId = message.recording;
-    const recording = recordings[recordingId];
-    
-    if (!recording) {
-      return <div className="text-sm text-gray-500">Voice message unavailable</div>;
-    }
-    
-    return (
-      <div className="flex items-center space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-700">
-        <button
-          onClick={() => toggleAudio(recordingId)}
-          className="h-8 w-8 rounded-full flex items-center justify-center bg-primary-500 text-white"
-        >
-          {playingAudio === recordingId ? <FiPause /> : <FiPlay />}
-        </button>
-        
-        <div className="flex-1">
-          <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-primary-500"
-              style={{ 
-                width: playingAudio === recordingId ? 
-                  `${(audioPlayerRef.current?.currentTime / audioPlayerRef.current?.duration) * 100}%` : 
-                  '0%'
-              }}
-            ></div>
-          </div>
-        </div>
-        
-        <div className="text-xs text-gray-500">{formatDuration(recording.duration)}</div>
-      </div>
-    );
-  };
-  
-  // User status options
-  const statusOptions = [
-    { id: 'online', label: 'Online', color: 'bg-green-500', icon: null },
-    { id: 'away', label: 'Away', color: 'bg-yellow-500', icon: <FiClock size={12} /> },
-    { id: 'busy', label: 'Busy', color: 'bg-red-500', icon: <FiMinus size={12} /> },
-    { id: 'offline', label: 'Offline', color: 'bg-gray-400', icon: <FiAlertCircle size={12} /> }
-  ];
-  
-  // Update user status
-  const updateUserStatus = (status) => {
-    setUserStatus(status);
-    localStorage.setItem('userStatus', status);
-    
-    // Emit status change to other users
-    socket.emit('user_status_update', {
-      roomId,
-      userId: currentUser.id,
-      status
-    });
-    
-    setShowStatusPicker(false);
-  };
-  
-  // Track user statuses
-  const [userStatuses, setUserStatuses] = useState({});
-  
-  useEffect(() => {
-    // Listen for status updates from other users
-    socket.on('user_status_update', ({ userId, status }) => {
-      setUserStatuses(prev => ({
-        ...prev,
-        [userId]: status
-      }));
-    });
-    
-    // Emit our initial status
-    socket.emit('user_status_update', {
-      roomId,
-      userId: currentUser.id,
-      status: userStatus
-    });
-    
-    return () => {
-      socket.off('user_status_update');
-    };
-  }, [socket, currentUser, roomId, userStatus]);
-  
-  // Get status of a user
-  const getUserStatus = (userId) => {
-    return userStatuses[userId] || 'online';
-  };
-  
-  // Render status indicator
-  const renderStatusIndicator = (status, className = '') => {
-    const statusOption = statusOptions.find(opt => opt.id === status) || statusOptions[0];
-    
-    return (
-      <div className={`relative ${className}`}>
-        <span className={`${statusOption.color} h-3 w-3 rounded-full ${className} flex items-center justify-center`}>
-          {statusOption.icon && <span className="text-white">{statusOption.icon}</span>}
-        </span>
-      </div>
-    );
-  };
-  
-  // Handle file selection
-  const handleFileSelect = (e) => {
-    const selectedFiles = e.target.files;
-    if (selectedFiles.length > 0) {
-      processFiles(selectedFiles);
-    }
-  };
-  
-  // Handle drag events
-  const handleDragEnter = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingFile(true);
-  };
-  
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingFile(false);
-  };
-  
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-  };
-  
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDraggingFile(false);
-    
-    const droppedFiles = e.dataTransfer.files;
-    if (droppedFiles.length > 0) {
-      processFiles(droppedFiles);
-    }
-  };
-  
-  // Process uploaded files
-  const processFiles = (fileList) => {
-    setFileUploading(true);
-    setUploadProgress(0);
-    
-    // Simulate upload progress
-    const progressInterval = setInterval(() => {
-      setUploadProgress(prev => {
-        if (prev >= 95) {
-          clearInterval(progressInterval);
-          return prev;
-        }
-        return prev + 5;
-      });
-    }, 100);
-    
-    // Array to store file promises
-    const filePromises = [];
-    
-    // Process each file
-    Array.from(fileList).forEach(file => {
-      const fileId = `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
-      // Create a promise to read the file
-      const filePromise = new Promise((resolve) => {
-        const reader = new FileReader();
-        
-        reader.onload = () => {
-          // For images, store the data URL for preview
-          const isImage = file.type.startsWith('image/');
-          
-          // Store file info
-          setFiles(prev => ({
-            ...prev,
-            [fileId]: {
-              id: fileId,
-              name: file.name,
-              type: file.type,
-              size: file.size,
-              url: isImage ? reader.result : null,
-              blob: file
-            }
-          }));
-          
-          resolve(fileId);
-        };
-        
-        // Read as data URL for images, or just complete for other files
-        if (file.type.startsWith('image/')) {
-          reader.readAsDataURL(file);
-        } else {
-          // For non-images, just complete without reading the file content
-          reader.onload();
-        }
-      });
-      
-      filePromises.push(filePromise);
-    });
-    
-    // When all files are processed, send file messages
-    Promise.all(filePromises).then(fileIds => {
-      // Complete upload progress
-      setUploadProgress(100);
-      
-      // Send file messages
-      fileIds.forEach(fileId => {
-        sendFileMessage(fileId);
-      });
-      
-      // Reset upload state
-      setTimeout(() => {
-        setFileUploading(false);
-        setUploadProgress(0);
-      }, 500);
-    });
   };
   
   // Send file message
@@ -1752,6 +1298,7 @@ const ChatRoom = () => {
                                   hover:shadow-md transition-shadow duration-200
                                 `}
                               >
+                                {renderReplyPreview(msg)}
                                 <motion.div
                                   variants={bubbleVariants}
                                   whileHover="hover"
@@ -1789,22 +1336,22 @@ const ChatRoom = () => {
                                   <button
                                     className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
                                     onClick={() => {
+                                      startReply(msg);
+                                      setSwipedMessageId(null);
+                                    }}
+                                    title="Reply to message"
+                                  >
+                                    <FiCornerUpRight size={16} />
+                                  </button>
+                                  <button
+                                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                                    onClick={() => {
                                       handleCopyMessage(msg.text);
                                       setSwipedMessageId(null);
                                     }}
                                     title="Copy message"
                                   >
                                     <FiCopy size={16} />
-                                  </button>
-                                  <button
-                                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
-                                    onClick={() => {
-                                      handleReplyToMessage(msg);
-                                      setSwipedMessageId(null);
-                                    }}
-                                    title="Reply to message"
-                                  >
-                                    <FiReply size={16} />
                                   </button>
                                   {isCurrentUser && (
                                     <>
