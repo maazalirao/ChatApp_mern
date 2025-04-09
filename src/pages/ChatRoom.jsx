@@ -47,7 +47,11 @@ import {
   FiCornerUpRight,
   FiPin,
   FiPieChart,
-  FiBarChart2
+  FiBarChart2,
+  FiCheckCircle,
+  FiPlusCircle,
+  FiMinusCircle,
+  FiPlusSquare
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -1042,7 +1046,7 @@ const ChatRoom = () => {
     
     setIsSearchingGifs(true);
     try {
-      // Using the public Giphy API key - in production, this should be on the server
+      // Using the Giphy API
       const response = await fetch(
         `https://api.giphy.com/v1/gifs/search?api_key=P30aJbiNV5N3m5bGBAW2I9oCcNxJsSLa&q=${encodeURIComponent(
           query
@@ -1066,8 +1070,14 @@ const ChatRoom = () => {
 
   // Handle selecting a GIF to send
   const handleGifSelect = (gif) => {
+    // Create a GIF message
     const gifMessage = {
-      type: "gif",
+      id: `gif-${Date.now()}`,
+      roomId,
+      userId: currentUser.id,
+      user: currentUser,
+      timestamp: new Date().toISOString(),
+      type: 'gif',
       gif: {
         url: gif.images.fixed_height.url,
         width: gif.images.fixed_height.width,
@@ -1077,24 +1087,56 @@ const ChatRoom = () => {
       text: `Sent a GIF: ${gif.title}`
     };
     
-    sendMessage(gifMessage);
+    // Add to messages
+    setRoomMessages(prev => [...prev, gifMessage]);
+    
+    // Emit socket event for GIF
+    socket.emit('message', {
+      ...gifMessage,
+      roomId,
+      type: 'gif'
+    });
+    
+    // Close GIF picker
     setShowGifPicker(false);
     setGifSearchQuery("");
     setGifResults([]);
+    
+    // Play sound effect
+    messageSound.current?.play().catch(err => console.log('Cannot play sound'));
   };
 
   // Function to render a GIF message
   const renderGifMessage = (msg) => {
+    if (!msg.gif || !msg.gif.url) return <div>GIF unavailable</div>;
+    
     return (
       <div className="gif-message">
-        <img 
-          src={msg.gif.url} 
-          alt={msg.gif.title || "GIF"} 
-          className="rounded-md max-w-[250px] max-h-[200px] cursor-pointer"
-          onClick={() => window.open(msg.gif.url, '_blank')}
-        />
+        <div className="relative group">
+          <img 
+            src={msg.gif.url} 
+            alt={msg.gif.title || "GIF"} 
+            className="rounded-lg max-w-full cursor-pointer"
+            style={{ maxHeight: '200px' }}
+            onClick={() => window.open(msg.gif.url, '_blank')}
+          />
+          
+          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+            <button
+              onClick={() => window.open(msg.gif.url, '_blank')}
+              className="p-2 bg-white rounded-full text-gray-800 mx-1 hover:bg-gray-100"
+              title="View full size"
+            >
+              <FiMaximize size={18} />
+            </button>
+          </div>
+        </div>
+        
         {msg.gif.title && (
-          <p className="text-xs text-gray-500 mt-1">{msg.gif.title}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            <RiGifLine className="inline mr-1" />
+            {msg.gif.title}
+          </p>
         )}
       </div>
     );
@@ -1909,8 +1951,19 @@ const ChatRoom = () => {
             className="btn-icon text-gray-500 dark:text-gray-400"
             aria-label="Add emoji"
             title="Add emoji to message"
+            onClick={() => setShowEmoji(!showEmoji)}
           >
             <FiSmile />
+          </button>
+          
+          <button
+            type="button"
+            className="btn-icon text-gray-500 dark:text-gray-400"
+            aria-label="Add GIF"
+            title="Search for GIFs"
+            onClick={() => setShowGifPicker(!showGifPicker)}
+          >
+            <RiGifLine />
           </button>
           
           <button
@@ -1921,14 +1974,6 @@ const ChatRoom = () => {
           >
             <FiPaperclip />
           </button>
-          
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleFileSelect}
-            className="hidden"
-            multiple
-          />
           
           {!isRecording && (
             <button
@@ -2015,7 +2060,7 @@ const ChatRoom = () => {
       
       {/* GIF Picker */}
       {showGifPicker && (
-        <div className="absolute bottom-16 left-0 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg p-3 w-full max-w-md">
+        <div className="absolute bottom-16 left-0 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-lg shadow-lg p-3 w-full max-w-md z-50">
           <div className="flex justify-between items-center mb-2">
             <h3 className="text-sm font-medium">Search GIFs</h3>
             <button
@@ -2033,6 +2078,7 @@ const ChatRoom = () => {
               onChange={handleGifSearchChange}
               placeholder="Search for GIFs..."
               className="w-full px-3 py-2 border rounded-md dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
             />
           </div>
           
@@ -2052,6 +2098,7 @@ const ChatRoom = () => {
                     src={gif.images.fixed_height_small.url}
                     alt={gif.title}
                     className="w-full h-24 object-cover"
+                    loading="lazy"
                   />
                 </div>
               ))}
