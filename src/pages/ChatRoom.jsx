@@ -33,7 +33,10 @@ import {
   FiMic,
   FiPlay,
   FiPause,
-  FiStopCircle
+  FiStopCircle,
+  FiClock,
+  FiAlertCircle,
+  FiMinus
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -69,6 +72,8 @@ const ChatRoom = () => {
   const [recordingDuration, setRecordingDuration] = useState(0);
   const [recordings, setRecordings] = useState({});
   const [playingAudio, setPlayingAudio] = useState(null);
+  const [userStatus, setUserStatus] = useState(localStorage.getItem('userStatus') || 'online');
+  const [showStatusPicker, setShowStatusPicker] = useState(false);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -811,6 +816,71 @@ const ChatRoom = () => {
     );
   };
   
+  // User status options
+  const statusOptions = [
+    { id: 'online', label: 'Online', color: 'bg-green-500', icon: null },
+    { id: 'away', label: 'Away', color: 'bg-yellow-500', icon: <FiClock size={12} /> },
+    { id: 'busy', label: 'Busy', color: 'bg-red-500', icon: <FiMinus size={12} /> },
+    { id: 'offline', label: 'Offline', color: 'bg-gray-400', icon: <FiAlertCircle size={12} /> }
+  ];
+  
+  // Update user status
+  const updateUserStatus = (status) => {
+    setUserStatus(status);
+    localStorage.setItem('userStatus', status);
+    
+    // Emit status change to other users
+    socket.emit('user_status_update', {
+      roomId,
+      userId: currentUser.id,
+      status
+    });
+    
+    setShowStatusPicker(false);
+  };
+  
+  // Track user statuses
+  const [userStatuses, setUserStatuses] = useState({});
+  
+  useEffect(() => {
+    // Listen for status updates from other users
+    socket.on('user_status_update', ({ userId, status }) => {
+      setUserStatuses(prev => ({
+        ...prev,
+        [userId]: status
+      }));
+    });
+    
+    // Emit our initial status
+    socket.emit('user_status_update', {
+      roomId,
+      userId: currentUser.id,
+      status: userStatus
+    });
+    
+    return () => {
+      socket.off('user_status_update');
+    };
+  }, [socket, currentUser, roomId, userStatus]);
+  
+  // Get status of a user
+  const getUserStatus = (userId) => {
+    return userStatuses[userId] || 'online';
+  };
+  
+  // Render status indicator
+  const renderStatusIndicator = (status, className = '') => {
+    const statusOption = statusOptions.find(opt => opt.id === status) || statusOptions[0];
+    
+    return (
+      <div className={`relative ${className}`}>
+        <span className={`${statusOption.color} h-3 w-3 rounded-full ${className} flex items-center justify-center`}>
+          {statusOption.icon && <span className="text-white">{statusOption.icon}</span>}
+        </span>
+      </div>
+    );
+  };
+  
   return (
     <div className="chat-container">
       {/* Chat header */}
@@ -846,6 +916,36 @@ const ChatRoom = () => {
         </div>
         
         <div className="flex items-center">
+          {/* Status indicator */}
+          <div className="relative mr-3">
+            <button
+              className="flex items-center space-x-1 px-2 py-1 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-800 dark:hover:bg-gray-700 text-sm"
+              onClick={() => setShowStatusPicker(!showStatusPicker)}
+              title="Change your status"
+            >
+              {renderStatusIndicator(userStatus, 'mr-1')}
+              <span className="hidden md:inline">{statusOptions.find(s => s.id === userStatus)?.label}</span>
+            </button>
+            
+            {/* Status picker */}
+            {showStatusPicker && (
+              <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700 w-40">
+                <div className="py-1">
+                  {statusOptions.map(option => (
+                    <button
+                      key={option.id}
+                      className="flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      onClick={() => updateUserStatus(option.id)}
+                    >
+                      {renderStatusIndicator(option.id, 'mr-2')}
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          
           <button 
             className="btn-icon mr-1"
             onClick={() => setShowSearch(!showSearch)}
@@ -1027,25 +1127,33 @@ const ChatRoom = () => {
             
             <div className="p-4 overflow-y-auto custom-scrollbar max-h-[calc(100vh-60px)]">
               <div className="space-y-4">
-                {roomInfo?.users?.map((user) => (
-                  <div 
-                    key={user.id} 
-                    className="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <img
-                      src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
-                      alt={user.username}
-                      className="avatar mr-3"
-                    />
-                    <div>
-                      <div className="font-medium">{user.username}</div>
-                      <div className="text-xs flex items-center text-green-500">
-                        <span className="h-2 w-2 rounded-full bg-green-500 mr-1"></span>
-                        Online
+                {roomInfo?.users?.map((user) => {
+                  const status = getUserStatus(user.id);
+                  const statusText = statusOptions.find(s => s.id === status)?.label || 'Online';
+                  const statusColor = statusOptions.find(s => s.id === status)?.color || 'bg-green-500';
+                  
+                  return (
+                    <div 
+                      key={user.id} 
+                      className="flex items-center p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                    >
+                      <div className="relative">
+                        <img
+                          src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                          alt={user.username}
+                          className="avatar mr-3"
+                        />
+                        {renderStatusIndicator(status, 'absolute bottom-0 right-1 border-2 border-white dark:border-gray-800')}
+                      </div>
+                      <div>
+                        <div className="font-medium">{user.username}</div>
+                        <div className="text-xs flex items-center text-gray-500">
+                          {statusText}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </motion.div>
@@ -1151,6 +1259,10 @@ const ChatRoom = () => {
                         {group.user?.username || 'User'}
                       </div>
                     )}
+                    
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {renderStatusIndicator(getUserStatus(group.userId))}
+                    </div>
                     
                     <div className="space-y-1">
                       {group.messages.map((msg, msgIndex) => {
