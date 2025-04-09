@@ -44,7 +44,8 @@ import {
   FiMaximize,
   FiUpload,
   FiAtSign,
-  FiCornerUpRight
+  FiCornerUpRight,
+  FiPin
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -94,6 +95,8 @@ const ChatRoom = () => {
   const [showThread, setShowThread] = useState(false);
   const [activeThread, setActiveThread] = useState(null);
   const [threadMessages, setThreadMessages] = useState([]);
+  const [pinnedMessages, setPinnedMessages] = useState([]);
+  const [showPinnedMessages, setShowPinnedMessages] = useState(true);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -928,6 +931,93 @@ const ChatRoom = () => {
     }
   };
   
+  // Handle pinning a message
+  const handlePinMessage = (msg) => {
+    // Check if message is already pinned
+    const isPinned = pinnedMessages.some(m => m.id === msg.id);
+    
+    if (isPinned) {
+      // Unpin message
+      const updatedPins = pinnedMessages.filter(m => m.id !== msg.id);
+      setPinnedMessages(updatedPins);
+      
+      // Notify other users
+      socket.emit('unpin_message', {
+        roomId,
+        messageId: msg.id,
+        userId: currentUser.id
+      });
+    } else {
+      // Pin message
+      setPinnedMessages(prev => [...prev, msg]);
+      
+      // Notify other users
+      socket.emit('pin_message', {
+        roomId,
+        messageId: msg.id,
+        userId: currentUser.id
+      });
+    }
+  };
+  
+  // Listen for pin/unpin events
+  useEffect(() => {
+    socket.on('pin_message', ({ messageId, userId }) => {
+      // Find the message in roomMessages
+      const message = roomMessages.find(m => m.id === messageId);
+      if (message && !pinnedMessages.some(m => m.id === messageId)) {
+        setPinnedMessages(prev => [...prev, message]);
+      }
+    });
+    
+    socket.on('unpin_message', ({ messageId }) => {
+      setPinnedMessages(prev => prev.filter(m => m.id !== messageId));
+    });
+    
+    return () => {
+      socket.off('pin_message');
+      socket.off('unpin_message');
+    };
+  }, [socket, roomMessages, pinnedMessages]);
+  
+  // Render pinned message
+  const renderPinnedMessage = (msg) => {
+    const isCurrentUser = msg.userId === currentUser.id || msg.user?.id === currentUser.id;
+    
+    return (
+      <div key={msg.id} className="flex items-center p-2 rounded-lg bg-gray-50 dark:bg-gray-800 mb-2 relative group">
+        <img
+          src={msg.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.user?.username || 'User')}&background=random`}
+          alt={msg.user?.username || 'User'}
+          className="h-6 w-6 rounded-full mr-2"
+        />
+        
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center">
+            <div className="font-medium text-xs">{msg.user?.username || 'User'}</div>
+            <div className="text-xs text-gray-500 ml-1">
+              {format(new Date(msg.timestamp), 'PP')}
+            </div>
+          </div>
+          
+          <div className="text-sm truncate">
+            {msg.type === 'voice' ? 'Voice message' : 
+             msg.type === 'file' ? 'File: ' + (msg.fileName || 'Attachment') : 
+             msg.text}
+          </div>
+        </div>
+        
+        <button
+          className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+          onClick={() => handlePinMessage(msg)}
+          title="Unpin message"
+        >
+          <FiX size={16} />
+        </button>
+      </div>
+    );
+  };
+  
   return (
     <div 
       className="chat-container"
@@ -1403,6 +1493,16 @@ const ChatRoom = () => {
                                   <button
                                     className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
                                     onClick={() => {
+                                      handlePinMessage(msg);
+                                      setSwipedMessageId(null);
+                                    }}
+                                    title={pinnedMessages.some(m => m.id === msg.id) ? "Unpin message" : "Pin message"}
+                                  >
+                                    <FiPin size={16} />
+                                  </button>
+                                  <button
+                                    className="btn-icon text-gray-500 dark:text-gray-400 hover:text-primary-500"
+                                    onClick={() => {
                                       handleCopyMessage(msg.text);
                                       setSwipedMessageId(null);
                                     }}
@@ -1672,6 +1772,49 @@ const ChatRoom = () => {
               <FiX className="w-4 h-4" />
             </button>
           </div>
+        </div>
+      )}
+      
+      {/* Pinned messages */}
+      {pinnedMessages.length > 0 && showPinnedMessages && (
+        <div className="border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+          <div className="p-2">
+            <div className="flex items-center justify-between mb-1">
+              <div className="flex items-center">
+                <FiPin className="mr-2 text-primary-500" size={16} />
+                <span className="font-medium">Pinned Messages</span>
+                <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
+                  {pinnedMessages.length}
+                </span>
+              </div>
+              
+              <button
+                onClick={() => setShowPinnedMessages(false)}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                title="Hide pinned messages"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+            
+            <div className="space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+              {pinnedMessages.map(msg => renderPinnedMessage(msg))}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Show pinned messages button when hidden */}
+      {pinnedMessages.length > 0 && !showPinnedMessages && (
+        <div className="absolute top-16 right-4 z-10">
+          <button
+            onClick={() => setShowPinnedMessages(true)}
+            className="flex items-center space-x-1 p-1 px-2 bg-white dark:bg-gray-800 rounded-full shadow-md border border-gray-200 dark:border-gray-700"
+            title="Show pinned messages"
+          >
+            <FiPin className="text-primary-500" size={14} />
+            <span className="text-xs">{pinnedMessages.length}</span>
+          </button>
         </div>
       )}
     </div>
