@@ -66,7 +66,8 @@ import {
   FiGlobe,
   FiBookmark,
   FiShare,
-  FiExternalLink
+  FiExternalLink,
+  FiFilter
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -154,6 +155,17 @@ const ChatRoom = () => {
   const [forwardMessage, setForwardMessage] = useState(null);
   const [forwardToRoom, setForwardToRoom] = useState('');
   const [linkPreviews, setLinkPreviews] = useState({});
+  const [showFilters, setShowFilters] = useState(false);
+  const [activeFilters, setActiveFilters] = useState({
+    messageTypes: [],
+    fromUsers: [],
+    withMedia: false,
+    onlyMentions: false,
+    dateRange: {
+      start: '',
+      end: ''
+    }
+  });
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -2499,6 +2511,316 @@ const ChatRoom = () => {
     };
   }, []);
   
+  // Filter options
+  const messageTypeOptions = [
+    { id: 'text', label: 'Text Messages' },
+    { id: 'file', label: 'Files & Attachments' },
+    { id: 'image', label: 'Images' },
+    { id: 'gif', label: 'GIFs' },
+    { id: 'code', label: 'Code Snippets' },
+    { id: 'poll', label: 'Polls' },
+    { id: 'voice', label: 'Voice Messages' }
+  ];
+  
+  // Apply filters to messages
+  const filteredMessages = useMemo(() => {
+    // Check if there are any active filters
+    const hasActiveFilters = (
+      activeFilters.messageTypes.length > 0 ||
+      activeFilters.fromUsers.length > 0 ||
+      activeFilters.withMedia ||
+      activeFilters.onlyMentions ||
+      activeFilters.dateRange.start ||
+      activeFilters.dateRange.end
+    );
+    
+    if (!hasActiveFilters) {
+      return roomMessages;
+    }
+    
+    return roomMessages.filter(msg => {
+      // Filter by message type
+      if (activeFilters.messageTypes.length > 0) {
+        const messageType = msg.type || 'text';
+        if (!activeFilters.messageTypes.includes(messageType)) {
+          return false;
+        }
+      }
+      
+      // Filter by user
+      if (activeFilters.fromUsers.length > 0) {
+        const userId = msg.userId || msg.user?.id;
+        if (!activeFilters.fromUsers.includes(userId)) {
+          return false;
+        }
+      }
+      
+      // Filter for media messages
+      if (activeFilters.withMedia) {
+        const hasMedia = ['image', 'file', 'voice', 'gif'].includes(msg.type);
+        if (!hasMedia) {
+          return false;
+        }
+      }
+      
+      // Filter for messages with mentions
+      if (activeFilters.onlyMentions) {
+        const hasMention = msg.text && msg.text.includes('@');
+        if (!hasMention) {
+          return false;
+        }
+      }
+      
+      // Filter by date range
+      const { start, end } = activeFilters.dateRange;
+      const messageDate = new Date(msg.timestamp);
+      
+      if (start) {
+        const startDate = new Date(start);
+        if (messageDate < startDate) {
+          return false;
+        }
+      }
+      
+      if (end) {
+        const endDate = new Date(end);
+        // Set to the end of the day
+        endDate.setHours(23, 59, 59, 999);
+        if (messageDate > endDate) {
+          return false;
+        }
+      }
+      
+      return true;
+    });
+  }, [roomMessages, activeFilters]);
+  
+  // Toggle a filter type
+  const toggleMessageTypeFilter = (typeId) => {
+    setActiveFilters(prev => {
+      const types = [...prev.messageTypes];
+      const typeIndex = types.indexOf(typeId);
+      
+      if (typeIndex === -1) {
+        // Add the type
+        types.push(typeId);
+      } else {
+        // Remove the type
+        types.splice(typeIndex, 1);
+      }
+      
+      return {
+        ...prev,
+        messageTypes: types
+      };
+    });
+  };
+  
+  // Toggle a user filter
+  const toggleUserFilter = (userId) => {
+    setActiveFilters(prev => {
+      const users = [...prev.fromUsers];
+      const userIndex = users.indexOf(userId);
+      
+      if (userIndex === -1) {
+        // Add the user
+        users.push(userId);
+      } else {
+        // Remove the user
+        users.splice(userIndex, 1);
+      }
+      
+      return {
+        ...prev,
+        fromUsers: users
+      };
+    });
+  };
+  
+  // Clear all filters
+  const clearFilters = () => {
+    setActiveFilters({
+      messageTypes: [],
+      fromUsers: [],
+      withMedia: false,
+      onlyMentions: false,
+      dateRange: {
+        start: '',
+        end: ''
+      }
+    });
+  };
+  
+  // Render filter badge
+  const renderFilterBadge = () => {
+    const filterCount = (
+      activeFilters.messageTypes.length +
+      activeFilters.fromUsers.length +
+      (activeFilters.withMedia ? 1 : 0) +
+      (activeFilters.onlyMentions ? 1 : 0) +
+      (activeFilters.dateRange.start || activeFilters.dateRange.end ? 1 : 0)
+    );
+    
+    if (filterCount === 0) return null;
+    
+    return (
+      <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary-500 text-white text-xs flex items-center justify-center">
+        {filterCount}
+      </span>
+    );
+  };
+  
+  // Render the filter panel
+  const renderFilterPanel = () => {
+    if (!showFilters) return null;
+    
+    // Get unique users in the room for user filter
+    const roomUsers = roomInfo?.users || [];
+    
+    return (
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 p-4">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white flex items-center">
+            <FiFilter size={18} className="mr-2" /> Filter Messages
+          </h3>
+          <div className="flex items-center space-x-2">
+            <button
+              onClick={clearFilters}
+              className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+            >
+              Clear all
+            </button>
+            <button 
+              onClick={() => setShowFilters(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Message Type Filter */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Message Type</h4>
+            <div className="space-y-1">
+              {messageTypeOptions.map(type => (
+                <div key={type.id} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`type-${type.id}`}
+                    checked={activeFilters.messageTypes.includes(type.id)}
+                    onChange={() => toggleMessageTypeFilter(type.id)}
+                    className="h-4 w-4 text-primary-500 rounded dark:bg-gray-700 dark:border-gray-600"
+                  />
+                  <label htmlFor={`type-${type.id}`} className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    {type.label}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* User Filter */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">From Users</h4>
+            <div className="max-h-40 overflow-y-auto space-y-1">
+              {roomUsers.map(user => (
+                <div key={user.id} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id={`user-${user.id}`}
+                    checked={activeFilters.fromUsers.includes(user.id)}
+                    onChange={() => toggleUserFilter(user.id)}
+                    className="h-4 w-4 text-primary-500 rounded dark:bg-gray-700 dark:border-gray-600"
+                  />
+                  <label htmlFor={`user-${user.id}`} className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                    {user.username}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {/* Additional Filters */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Additional Filters</h4>
+            <div className="space-y-2">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="media-filter"
+                  checked={activeFilters.withMedia}
+                  onChange={() => setActiveFilters(prev => ({ ...prev, withMedia: !prev.withMedia }))}
+                  className="h-4 w-4 text-primary-500 rounded dark:bg-gray-700 dark:border-gray-600"
+                />
+                <label htmlFor="media-filter" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  Only show messages with media
+                </label>
+              </div>
+              
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  id="mentions-filter"
+                  checked={activeFilters.onlyMentions}
+                  onChange={() => setActiveFilters(prev => ({ ...prev, onlyMentions: !prev.onlyMentions }))}
+                  className="h-4 w-4 text-primary-500 rounded dark:bg-gray-700 dark:border-gray-600"
+                />
+                <label htmlFor="mentions-filter" className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  Only show messages with @mentions
+                </label>
+              </div>
+            </div>
+          </div>
+          
+          {/* Date Range Filter */}
+          <div>
+            <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Date Range</h4>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label htmlFor="date-from" className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                  From
+                </label>
+                <input
+                  type="date"
+                  id="date-from"
+                  value={activeFilters.dateRange.start}
+                  onChange={(e) => setActiveFilters(prev => ({
+                    ...prev,
+                    dateRange: { ...prev.dateRange, start: e.target.value }
+                  }))}
+                  className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+              
+              <div>
+                <label htmlFor="date-to" className="text-xs text-gray-500 dark:text-gray-400 block mb-1">
+                  To
+                </label>
+                <input
+                  type="date"
+                  id="date-to"
+                  value={activeFilters.dateRange.end}
+                  onChange={(e) => setActiveFilters(prev => ({
+                    ...prev,
+                    dateRange: { ...prev.dateRange, end: e.target.value }
+                  }))}
+                  className="w-full p-2 text-sm border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Filter results summary */}
+        <div className="mt-4 text-sm text-gray-600 dark:text-gray-400">
+          Showing {filteredMessages.length} of {roomMessages.length} messages
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       {/* Chat Header */}
@@ -2520,6 +2842,17 @@ const ChatRoom = () => {
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* Filter Button */}
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className="relative p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label="Filter messages"
+            title="Filter messages"
+          >
+            <FiFilter size={20} />
+            {renderFilterBadge()}
+          </button>
+        
           {/* Sound Toggle Button */}
           <button
             onClick={toggleSound}
@@ -2584,6 +2917,9 @@ const ChatRoom = () => {
           </button>
         </div>
       </div>
+      
+      {/* Filter Panel */}
+      {renderFilterPanel()}
       
       {/* Render the bookmarks panel */}
       {renderBookmarksPanel()}
