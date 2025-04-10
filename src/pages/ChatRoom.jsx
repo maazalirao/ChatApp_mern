@@ -65,7 +65,8 @@ import {
   FiCalendar,
   FiGlobe,
   FiBookmark,
-  FiShare
+  FiShare,
+  FiExternalLink
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -152,6 +153,7 @@ const ChatRoom = () => {
   const [showForwardDialog, setShowForwardDialog] = useState(false);
   const [forwardMessage, setForwardMessage] = useState(null);
   const [forwardToRoom, setForwardToRoom] = useState('');
+  const [linkPreviews, setLinkPreviews] = useState({});
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -2284,6 +2286,218 @@ const ChatRoom = () => {
       </div>
     );
   };
+  
+  // Function to extract URLs from message text
+  const extractUrls = (text) => {
+    if (!text) return [];
+    
+    // Regular expression to match URLs
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    return text.match(urlRegex) || [];
+  };
+  
+  // Fetch link preview data
+  const fetchLinkPreview = async (url, messageId) => {
+    try {
+      // Set loading state
+      setLinkPreviews(prev => ({
+        ...prev,
+        [url]: { loading: true }
+      }));
+      
+      // In a real app, you would use a backend service or API to fetch the preview
+      // For demo purposes, we'll create a mock preview
+      
+      // Mock API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Create a mock preview based on the URL
+      // In production, use a service like link-preview-js or opengraph.io
+      const mockPreview = generateMockPreview(url);
+      
+      // Update state with preview data
+      setLinkPreviews(prev => ({
+        ...prev,
+        [url]: {
+          loading: false,
+          ...mockPreview
+        }
+      }));
+    } catch (error) {
+      console.error('Error fetching link preview:', error);
+      // Set error state
+      setLinkPreviews(prev => ({
+        ...prev,
+        [url]: { loading: false, error: true }
+      }));
+    }
+  };
+  
+  // Generate a mock preview based on the URL
+  const generateMockPreview = (url) => {
+    // This is just a mock function - in a real app, you would fetch actual preview data
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname;
+    
+    // Create basic preview based on domain
+    const preview = {
+      url,
+      title: `Content from ${domain}`,
+      description: 'This is a mock preview for demonstration purposes. In a real application, this would be fetched from the actual page metadata.',
+      domain,
+      image: null
+    };
+    
+    // Add mock images for some popular domains
+    if (domain.includes('youtube')) {
+      preview.title = 'YouTube Video';
+      preview.image = 'https://i.imgur.com/ZY8dKAG.png';
+    } else if (domain.includes('github')) {
+      preview.title = 'GitHub Repository';
+      preview.image = 'https://github.githubassets.com/images/modules/logos_page/GitHub-Mark.png';
+    } else if (domain.includes('twitter') || domain.includes('x.com')) {
+      preview.title = 'Twitter Post';
+      preview.image = 'https://abs.twimg.com/responsive-web/client-web/icon-ios.b1fc7275.png';
+    } else {
+      // Generic image for other domains
+      preview.image = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+    }
+    
+    return preview;
+  };
+  
+  // Process new messages to extract and fetch link previews
+  useEffect(() => {
+    // Process only the last few messages to avoid excessive API calls
+    const recentMessages = roomMessages.slice(-5);
+    
+    recentMessages.forEach(msg => {
+      if (msg.text) {
+        const urls = extractUrls(msg.text);
+        
+        // Only fetch the first URL in the message
+        if (urls.length > 0) {
+          const firstUrl = urls[0];
+          
+          // Only fetch if we don't already have this preview
+          if (!linkPreviews[firstUrl]) {
+            fetchLinkPreview(firstUrl, msg.id);
+          }
+        }
+      }
+    });
+  }, [roomMessages]);
+  
+  // Render link preview for a message
+  const renderLinkPreview = (message) => {
+    if (!message.text) return null;
+    
+    const urls = extractUrls(message.text);
+    if (urls.length === 0) return null;
+    
+    // Use only the first URL for preview
+    const url = urls[0];
+    const preview = linkPreviews[url];
+    
+    if (!preview) return null;
+    
+    // Show loading state
+    if (preview.loading) {
+      return (
+        <div className="mt-2 bg-gray-50 dark:bg-gray-700 rounded-md p-3 animate-pulse">
+          <div className="h-4 bg-gray-200 dark:bg-gray-600 rounded w-3/4 mb-2"></div>
+          <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-1/2 mb-1"></div>
+          <div className="h-3 bg-gray-200 dark:bg-gray-600 rounded w-2/3"></div>
+        </div>
+      );
+    }
+    
+    // Show error state
+    if (preview.error) {
+      return null; // Skip showing anything on error
+    }
+    
+    // Show preview
+    return (
+      <a 
+        href={url} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="block mt-2 border border-gray-200 dark:border-gray-600 rounded-md overflow-hidden hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+      >
+        <div className="flex">
+          {preview.image && (
+            <div className="w-24 h-24 flex-shrink-0 bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
+              <img 
+                src={preview.image} 
+                alt=""
+                className="max-w-full max-h-full object-cover"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  e.target.src = `https://www.google.com/s2/favicons?domain=${preview.domain}&sz=64`;
+                }}
+              />
+            </div>
+          )}
+          
+          <div className="p-3 flex-1 min-w-0">
+            <div className="font-medium text-sm text-gray-900 dark:text-white truncate">
+              {preview.title}
+            </div>
+            
+            <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-1">
+              {preview.description}
+            </div>
+            
+            <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 flex items-center">
+              <FiExternalLink size={12} className="mr-1" />
+              {preview.domain}
+            </div>
+          </div>
+        </div>
+      </a>
+    );
+  };
+  
+  // Add the line-clamp utility classes
+  useEffect(() => {
+    // Check if the style already exists
+    if (document.getElementById('line-clamp-style')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'line-clamp-style';
+    style.innerHTML = `
+      .line-clamp-1 {
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      
+      .line-clamp-2 {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      
+      .line-clamp-3 {
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+    `;
+    
+    document.head.appendChild(style);
+    
+    return () => {
+      const styleElement = document.getElementById('line-clamp-style');
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, []);
   
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
