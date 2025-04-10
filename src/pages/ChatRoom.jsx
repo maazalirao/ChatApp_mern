@@ -355,7 +355,7 @@ const ChatRoom = () => {
                   alt={user.username}
                   className="h-6 w-6 rounded-full border-2 border-white dark:border-gray-800"
                 />
-                <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border border-white dark:border-gray-800"></div>
+                <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border border-white dark:border-gray-800 animate-pulse"></div>
               </div>
             );
           })}
@@ -363,10 +363,10 @@ const ChatRoom = () => {
         
         <div className="flex flex-col items-start">
           <div className="flex space-x-1 items-center">
-            <div className="flex space-x-0.5">
-              <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
-              <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
-              <div className="h-2 w-2 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
+            <div className="typing-animation flex space-x-1">
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
+              <span className="typing-dot"></span>
             </div>
           </div>
           
@@ -384,12 +384,94 @@ const ChatRoom = () => {
     );
   };
   
-  // Enhanced typing status handling
+  // Add CSS for typing animation - place in a useEffect to add to document once
+  useEffect(() => {
+    // If the stylesheet already exists, don't add it again
+    if (document.getElementById('typing-animation-style')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'typing-animation-style';
+    style.innerHTML = `
+      .typing-animation {
+        display: flex;
+        align-items: center;
+      }
+      
+      .typing-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: #9CA3AF;
+        margin: 0 1px;
+      }
+      
+      .typing-dot:nth-child(1) {
+        animation: typing-dot 1.4s infinite;
+        animation-delay: 0s;
+      }
+      
+      .typing-dot:nth-child(2) {
+        animation: typing-dot 1.4s infinite;
+        animation-delay: 0.2s;
+      }
+      
+      .typing-dot:nth-child(3) {
+        animation: typing-dot 1.4s infinite;
+        animation-delay: 0.4s;
+      }
+      
+      @keyframes typing-dot {
+        0% {
+          transform: scale(1);
+          opacity: 0.6;
+        }
+        
+        20% {
+          transform: scale(1.4);
+          opacity: 1;
+        }
+        
+        50%, 100% {
+          transform: scale(1);
+          opacity: 0.6;
+        }
+      }
+      
+      @media (prefers-color-scheme: dark) {
+        .typing-dot {
+          background-color: #D1D5DB;
+        }
+      }
+    `;
+    
+    document.head.appendChild(style);
+    
+    // Clean up the style when the component unmounts
+    return () => {
+      const styleElement = document.getElementById('typing-animation-style');
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, []);
+  
+  // Enhanced typing status handling with debounce
+  const debouncedSendTypingStatus = useCallback(
+    debounce((roomId, isTyping) => {
+      sendTypingStatus(roomId, isTyping);
+    }, 500),
+    [sendTypingStatus]
+  );
+  
+  // Updated handleTyping with better debounce
   const handleTyping = () => {
     if (!isTyping) {
       setIsTyping(true);
-      sendTypingStatus(roomId, true);
     }
+    
+    // Send typing status with debounce
+    debouncedSendTypingStatus(roomId, true);
     
     // Clear existing timeout
     if (typingTimeout) {
