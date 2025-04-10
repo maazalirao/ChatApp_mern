@@ -59,7 +59,9 @@ import {
   FiMenu,
   FiChevronRight,
   FiMinimize,
-  FiPrinter
+  FiPrinter,
+  FiBell,
+  FiBellOff
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -130,6 +132,9 @@ const ChatRoom = () => {
   const [codeLanguage, setCodeLanguage] = useState('javascript');
   const [copiedSnippetId, setCopiedSnippetId] = useState(null);
   const [showPinned, setShowPinned] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(
+    localStorage.getItem('chatSoundEnabled') !== 'false' // default to true
+  );
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -561,6 +566,36 @@ const ChatRoom = () => {
     setReplyToMessage(null);
   };
   
+  // Toggle sound notifications
+  const toggleSound = () => {
+    const newState = !soundEnabled;
+    setSoundEnabled(newState);
+    localStorage.setItem('chatSoundEnabled', newState.toString());
+    
+    // Show toast notification
+    const message = newState ? 'Notifications unmuted' : 'Notifications muted';
+    showToast(message);
+  };
+  
+  // Update message sound effects with sound toggle
+  useEffect(() => {
+    messageSound.current = typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null;
+    
+    return () => {
+      if (messageSound.current) {
+        messageSound.current.pause();
+        messageSound.current = null;
+      }
+    };
+  }, []);
+  
+  // Play sound only if enabled
+  const playMessageSound = () => {
+    if (soundEnabled && messageSound.current) {
+      messageSound.current.play().catch(err => console.log('Cannot play sound', err));
+    }
+  };
+  
   // Modify the handleSendMessage function to handle replies
   const handleSendMessage = (e) => {
     e.preventDefault();
@@ -596,7 +631,7 @@ const ChatRoom = () => {
       sendMessage(roomId, message.trim());
       
       // Play sound effect
-      messageSound.current?.play().catch(err => console.log('Cannot play sound'));
+      playMessageSound();
       
       // Clear input and reply state
       setMessage('');
@@ -860,7 +895,7 @@ const ChatRoom = () => {
     setRoomMessages(prev => [...prev, fileMessage]);
     
     // Play the send sound
-    messageSound.current?.play().catch(err => console.log('Cannot play sound'));
+    playMessageSound();
   };
   
   // Download file
@@ -1122,7 +1157,7 @@ const ChatRoom = () => {
     setGifResults([]);
     
     // Play sound effect
-    messageSound.current?.play().catch(err => console.log('Cannot play sound'));
+    playMessageSound();
   };
 
   // Function to render a GIF message
@@ -1360,7 +1395,7 @@ const ChatRoom = () => {
     setCodeSnippet('');
     
     // Play sound effect
-    messageSound.current?.play().catch(err => console.log('Cannot play sound'));
+    playMessageSound();
   };
 
   // Fetch pinned messages when room loads
@@ -1423,6 +1458,16 @@ const ChatRoom = () => {
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* Sound Toggle Button */}
+          <button
+            onClick={toggleSound}
+            className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            aria-label={soundEnabled ? "Mute notifications" : "Unmute notifications"}
+            title={soundEnabled ? "Mute notifications" : "Unmute notifications"}
+          >
+            {soundEnabled ? <FiBell size={20} /> : <FiBellOff size={20} />}
+          </button>
+          
           {/* Pinned Messages Button */}
           <button
             onClick={() => setShowPinned(prev => !prev)}
