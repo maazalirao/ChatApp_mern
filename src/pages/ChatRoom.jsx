@@ -135,6 +135,7 @@ const ChatRoom = () => {
   const [soundEnabled, setSoundEnabled] = useState(
     localStorage.getItem('chatSoundEnabled') !== 'false' // default to true
   );
+  const [readReceipts, setReadReceipts] = useState({});
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -1436,6 +1437,82 @@ const ChatRoom = () => {
       }
     };
   }, [socket, roomInfo]);
+
+  // Mark messages as read when they're displayed
+  useEffect(() => {
+    if (socket && roomMessages.length > 0 && currentUser) {
+      // Get the latest message
+      const latestMessage = roomMessages[roomMessages.length - 1];
+      
+      // Only mark messages as read if the latest message is visible
+      // (user is at the bottom of the chat)
+      if (autoScroll && latestMessage.userId !== currentUser.id) {
+        socket.emit('mark_messages_read', {
+          roomId,
+          userId: currentUser.id,
+          username: currentUser.username,
+          timestamp: new Date().toISOString()
+        });
+      }
+    }
+  }, [roomMessages, autoScroll, currentUser, roomId, socket]);
+  
+  // Listen for read receipts from other users
+  useEffect(() => {
+    if (socket) {
+      socket.on('messages_read', ({ userId, username, timestamp }) => {
+        if (userId !== currentUser.id) {
+          setReadReceipts(prev => ({
+            ...prev,
+            [userId]: { username, timestamp }
+          }));
+        }
+      });
+    }
+    
+    return () => {
+      if (socket) {
+        socket.off('messages_read');
+      }
+    };
+  }, [socket, currentUser]);
+  
+  // Render read receipts for messages
+  const renderReadReceipts = (message) => {
+    // Only show read receipts for messages sent by the current user
+    if (message.userId !== currentUser.id) return null;
+    
+    // Get users who have read this message (users with read timestamp after message timestamp)
+    const readers = Object.entries(readReceipts)
+      .filter(([userId, receipt]) => {
+        return new Date(receipt.timestamp) > new Date(message.timestamp);
+      })
+      .map(([userId, receipt]) => receipt);
+    
+    if (readers.length === 0) return null;
+    
+    return (
+      <div className="flex justify-end mt-1">
+        <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+          <span className="mr-1">Read by</span>
+          <div className="flex -space-x-2">
+            {readers.slice(0, 3).map((receipt, index) => (
+              <div 
+                key={index} 
+                className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] border border-white dark:border-gray-900"
+                title={receipt.username}
+              >
+                {receipt.username.charAt(0).toUpperCase()}
+              </div>
+            ))}
+          </div>
+          {readers.length > 3 && (
+            <span className="ml-1">+{readers.length - 3}</span>
+          )}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
