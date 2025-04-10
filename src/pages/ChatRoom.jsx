@@ -2821,114 +2821,421 @@ const ChatRoom = () => {
     );
   };
   
+  // Handle adding emoji to message input
+  const handleEmojiSelect = (emoji) => {
+    const input = messageInputRef.current;
+    if (!input) return;
+    
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const text = message;
+    
+    const newText = text.substring(0, start) + emoji.native + text.substring(end);
+    setMessage(newText);
+    
+    // Update cursor position to after the inserted emoji
+    const newPosition = start + emoji.native.length;
+    
+    // Focus back on input after inserting emoji
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(newPosition, newPosition);
+    }, 0);
+    
+    // Close emoji picker
+    setShowEmoji(false);
+  };
+
+  // Toggle emoji picker visibility
+  const toggleEmojiPicker = () => {
+    setShowEmoji(prev => !prev);
+    // Close other pickers/menus when opening emoji picker
+    if (!showEmoji) {
+      setShowGifPicker(false);
+      setShowFormatting(false);
+    }
+  };
+  
+  // Render the chat interface
   return (
-    <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
       {/* Chat Header */}
-      <div className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 p-4 flex justify-between items-center">
-        <div className="flex items-center">
+      <div className="py-2 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm">
+        {/* Left side */}
+        <div className="flex items-center space-x-4">
           <button 
-            onClick={() => navigate('/')}
-            className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 md:hidden"
-            aria-label="Back to dashboard"
+            onClick={() => navigate('/dashboard')} 
+            className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 md:hidden"
           >
-            <FiArrowLeft size={20} />
+            <FiArrowLeft size={24} />
           </button>
           
-          <div className="flex-1 mx-4 flex items-center justify-center">
-            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 truncate">
+          <div className="flex flex-col">
+            <h1 className="font-medium text-lg truncate max-w-[150px] md:max-w-xs">
               {roomInfo?.name || 'Chat Room'}
-            </h3>
+            </h1>
+            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+              <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
+              {roomInfo?.users?.length || 0} online
+            </div>
           </div>
         </div>
         
-        <div className="flex items-center space-x-2">
-          {/* Filter Button */}
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="relative p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label="Filter messages"
-            title="Filter messages"
+        {/* Right side */}
+        <div className="flex items-center space-x-1">
+          <button 
+            onClick={() => setShowSearch(prev => !prev)}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 relative"
           >
-            <FiFilter size={20} />
-            {renderFilterBadge()}
-          </button>
-        
-          {/* Sound Toggle Button */}
-          <button
-            onClick={toggleSound}
-            className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label={soundEnabled ? "Mute notifications" : "Unmute notifications"}
-            title={soundEnabled ? "Mute notifications" : "Unmute notifications"}
-          >
-            {soundEnabled ? <FiBell size={20} /> : <FiBellOff size={20} />}
+            <FiSearch size={20} />
           </button>
           
-          {/* Bookmarks Button */}
-          <button
-            onClick={() => setShowBookmarks(!showBookmarks)}
-            className={`p-2 rounded-full relative ${
-              bookmarkedMessages.length > 0
-                ? 'text-blue-600 dark:text-blue-400'
-                : 'text-gray-600 dark:text-gray-400'
-            } hover:bg-gray-100 dark:hover:bg-gray-700`}
-            aria-label="Bookmarked messages"
-            title="Bookmarked messages"
-          >
-            <FiBookmark size={20} className={bookmarkedMessages.some(msg => msg.roomId === roomId) ? "fill-current" : ""} />
-            {bookmarkedMessages.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                {bookmarkedMessages.length}
-              </span>
-            )}
-          </button>
-          
-          {/* Pinned Messages Button */}
-          <button
+          <button 
             onClick={() => setShowPinned(prev => !prev)}
-            className={`p-2 rounded-full relative ${
-              pinnedMessages.length > 0
-                ? 'text-yellow-600 dark:text-yellow-400'
-                : 'text-gray-600 dark:text-gray-400'
-            } hover:bg-gray-100 dark:hover:bg-gray-700`}
-            title="Pinned Messages"
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 relative"
           >
-            <FiPin size={20} className={showPinned ? "rotate-45" : ""} />
+            <FiPin size={20} />
             {pinnedMessages.length > 0 && (
-              <span className="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
                 {pinnedMessages.length}
               </span>
             )}
           </button>
-          
-          <button
+
+          <button 
             onClick={() => setShowUsersList(true)}
-            className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label="Show users"
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
           >
             <FiUsers size={20} />
           </button>
           
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            aria-label="More options"
+          <button 
+            onClick={() => setShowMenu(prev => !prev)}
+            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 relative"
           >
             <FiMoreVertical size={20} />
+            {showMenu && (
+              <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 shadow-lg rounded-lg py-1 w-56 z-50">
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    setShowFilters(true);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <FiFilter className="mr-2" />
+                  <span>Filter Messages</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowMenu(false);
+                    setShowBookmarks(true);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <FiBookmark className="mr-2" />
+                  <span>Bookmarked Messages</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowThemeSettings(prev => !prev);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <FiSettings className="mr-2" />
+                  <span>Appearance</span>
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setIsDarkMode(prev => !prev);
+                    localStorage.setItem('darkMode', !isDarkMode);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  {isDarkMode ? (
+                    <>
+                      <FiSun className="mr-2" />
+                      <span>Light Mode</span>
+                    </>
+                  ) : (
+                    <>
+                      <FiMoon className="mr-2" />
+                      <span>Dark Mode</span>
+                    </>
+                  )}
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowScheduledList(true);
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <FiClock className="mr-2" />
+                  <span>Scheduled Messages</span>
+                </button>
+                
+                <hr className="my-1 border-gray-200 dark:border-gray-700" />
+                
+                <button
+                  onClick={() => {
+                    handleLeaveRoom();
+                    setShowMenu(false);
+                  }}
+                  className="w-full px-4 py-2 text-left text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
+                >
+                  <FiLogOut className="mr-2" />
+                  <span>Leave Room</span>
+                </button>
+              </div>
+            )}
           </button>
         </div>
       </div>
       
-      {/* Filter Panel */}
-      {renderFilterPanel()}
-      
-      {/* Render the bookmarks panel */}
-      {renderBookmarksPanel()}
-      
-      {/* Render the forward dialog */}
-      {renderForwardDialog()}
-      
-      {/* Rest of your existing code - add bookmark button to message swipe actions where needed */}
-      {/* Existing pinned messages panel, chat container, etc. */}
+      {/* Main chat area - flexible height container */}
+      <div className="flex-1 flex overflow-hidden relative">
+        {/* Chat messages panel - scrollable */}
+        <div className="flex-1 flex flex-col overflow-hidden relative">
+          {/* ... existing code ... */}
+          
+          {/* Chat input area */}
+          <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800">
+            {/* Reply preview */}
+            {replyToMessage && (
+              <div className="flex items-center mb-2 p-2 rounded bg-gray-100 dark:bg-gray-700">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
+                    <FiCornerUpRight className="mr-1" size={12} />
+                    <span className="font-medium mr-1">
+                      {replyToMessage.user?.username || 'User'}:
+                    </span>
+                    <span className="truncate">
+                      {replyToMessage.text || 'Message'}
+                    </span>
+                  </div>
+                </div>
+                <button 
+                  onClick={cancelReply}
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  <FiX size={16} />
+                </button>
+              </div>
+            )}
+            
+            {/* Message formatting toolbar */}
+            {showFormatting && (
+              <div className="flex space-x-2 mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
+                <button 
+                  onClick={() => applyFormatting('bold')} 
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  title="Bold"
+                >
+                  <FiBold size={16} />
+                </button>
+                <button 
+                  onClick={() => applyFormatting('italic')} 
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  title="Italic"
+                >
+                  <FiItalic size={16} />
+                </button>
+                <button 
+                  onClick={() => applyFormatting('underline')} 
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  title="Underline"
+                >
+                  <FiUnderline size={16} />
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowCodeEditor(true);
+                    setShowFormatting(false);
+                  }} 
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  title="Code Snippet"
+                >
+                  <FiCode size={16} />
+                </button>
+                <button 
+                  onClick={() => {
+                    setShowPollCreator(true);
+                    setShowFormatting(false);
+                  }} 
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
+                  title="Create Poll"
+                >
+                  <FiPieChart size={16} />
+                </button>
+              </div>
+            )}
+            
+            {/* Emoji picker */}
+            {showEmoji && (
+              <div className="absolute bottom-20 right-16 z-10 shadow-lg rounded-lg overflow-hidden">
+                <Picker 
+                  data={data} 
+                  onEmojiSelect={handleEmojiSelect}
+                  theme={isDarkMode ? "dark" : "light"}
+                  previewPosition="none"
+                  skinTonePosition="none"
+                  set="native"
+                />
+              </div>
+            )}
+            
+            {/* Message input area */}
+            <form onSubmit={handleSendMessage} className="flex items-end">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={messageInputRef}
+                  value={message}
+                  onChange={e => {
+                    setMessage(e.target.value);
+                    handleTyping();
+                    
+                    // Check for mention
+                    const text = e.target.value;
+                    const cursorPos = e.target.selectionStart;
+                    setCursorPosition(cursorPos);
+                    
+                    // Find @ before cursor
+                    const textBeforeCursor = text.substring(0, cursorPos);
+                    const atIndex = textBeforeCursor.lastIndexOf('@');
+                    
+                    if (atIndex !== -1 && atIndex > textBeforeCursor.lastIndexOf(' ')) {
+                      const mentionText = textBeforeCursor.substring(atIndex + 1);
+                      setMentionSearch(mentionText);
+                      setShowMentions(true);
+                      setMentionIndex(0);
+                    } else {
+                      setShowMentions(false);
+                    }
+                  }}
+                  placeholder="Type a message..."
+                  className="w-full border rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none dark:bg-gray-700 dark:border-gray-600"
+                  rows="1"
+                  style={{ maxHeight: '120px', minHeight: '40px' }}
+                  onKeyDown={e => {
+                    handleMentionKeyDown(e);
+                    handleKeyDown(e);
+                  }}
+                />
+                
+                {/* Character limit indicator */}
+                <div className="absolute bottom-1 right-2 text-xs text-gray-400">
+                  {message.length > 400 ? (
+                    <span className={message.length > 500 ? 'text-red-500' : 'text-yellow-500'}>
+                      {message.length}/500
+                    </span>
+                  ) : null}
+                </div>
+                
+                {/* Mentions dropdown */}
+                {showMentions && filteredUsers.length > 0 && (
+                  <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden z-10 max-h-48 overflow-y-auto w-64">
+                    {filteredUsers.map((user, index) => (
+                      <div
+                        key={user.id}
+                        className={`
+                          p-2 cursor-pointer flex items-center
+                          ${index === mentionIndex ? 'bg-gray-100 dark:bg-gray-700' : ''}
+                          hover:bg-gray-100 dark:hover:bg-gray-700
+                        `}
+                        onClick={() => insertMention(user)}
+                      >
+                        <img
+                          src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
+                          alt={user.username}
+                          className="h-6 w-6 rounded-full mr-2"
+                        />
+                        <div className="text-sm">{user.username}</div>
+                        {user.status && (
+                          <div className="ml-auto text-xs text-gray-500">{user.status}</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              
+              {/* Message action buttons */}
+              <div className="flex items-center pl-2">
+                <button
+                  type="button"
+                  onClick={toggleEmojiPicker}
+                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
+                  title="Add emoji"
+                >
+                  <FiSmile size={20} className={showEmoji ? "text-primary-500" : ""} />
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGifPicker(prev => !prev);
+                    setShowEmoji(false);
+                    setShowFormatting(false);
+                  }}
+                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
+                  title="Add GIF"
+                >
+                  <RiGifLine size={20} className={showGifPicker ? "text-primary-500" : ""} />
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowFormatting(prev => !prev);
+                    setShowEmoji(false);
+                    setShowGifPicker(false);
+                  }}
+                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
+                  title="Formatting options"
+                >
+                  <FiBold size={20} className={showFormatting ? "text-primary-500" : ""} />
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={!message.trim() || isSending}
+                  className={`
+                    p-2 rounded-full ml-1
+                    ${!message.trim() || isSending ? 
+                      'bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed' : 
+                      'bg-primary-500 text-white hover:bg-primary-600'
+                    }
+                    transition-colors
+                  `}
+                  title="Send message"
+                >
+                  <FiSend size={20} />
+                </button>
+              </div>
+            </form>
+            
+            {/* Typing indicator */}
+            {typingUsers && typingUsers.length > 0 && typingUsers[0] !== currentUser.username && (
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
+                {typingUsers.length === 1 ? 
+                  `${typingUsers[0]} is typing...` : 
+                  `${typingUsers.length} people are typing...`
+                }
+              </div>
+            )}
+          </div>
+        </div>
+        
+        {/* ... existing code ... */}
+        
+      </div>
     </div>
   );
 };
