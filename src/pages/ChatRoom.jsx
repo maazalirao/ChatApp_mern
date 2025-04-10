@@ -62,7 +62,8 @@ import {
   FiPrinter,
   FiBell,
   FiBellOff,
-  FiCalendar
+  FiCalendar,
+  FiGlobe
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -142,6 +143,8 @@ const ChatRoom = () => {
   const [scheduledTime, setScheduledTime] = useState('');
   const [scheduledMessages, setScheduledMessages] = useState([]);
   const [showScheduledList, setShowScheduledList] = useState(false);
+  const [translatedMessages, setTranslatedMessages] = useState({});
+  const [targetLanguage, setTargetLanguage] = useState(localStorage.getItem('targetLanguage') || 'en');
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -1626,6 +1629,188 @@ const ChatRoom = () => {
     return date.toLocaleString();
   };
 
+  // Available languages for translation
+  const availableLanguages = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'it', name: 'Italian' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' },
+    { code: 'ar', name: 'Arabic' },
+    { code: 'hi', name: 'Hindi' }
+  ];
+  
+  // Save target language to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('targetLanguage', targetLanguage);
+  }, [targetLanguage]);
+  
+  // Mock function for translation (in a real app, this would call a translation API)
+  const translateText = async (text, targetLang) => {
+    // This is a mock function - in a real app, you would use a translation API
+    // such as Google Translate API, DeepL, or Microsoft Translator
+    
+    try {
+      // For demo purposes, we'll simulate an API call with a timeout
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // MOCK TRANSLATION - replace with real API in production
+      // This just adds a prefix to show it's "translated"
+      return `[${targetLang}] ${text}`;
+      
+      // Example of how a real implementation might look:
+      /*
+      const response = await fetch('https://translation-api.example.com/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer YOUR_API_KEY'
+        },
+        body: JSON.stringify({
+          text,
+          source: 'auto',
+          target: targetLang
+        })
+      });
+      
+      const data = await response.json();
+      return data.translatedText;
+      */
+    } catch (error) {
+      console.error('Translation error:', error);
+      return text; // Fallback to original text
+    }
+  };
+  
+  // Handle message translation
+  const handleTranslateMessage = async (messageId, text) => {
+    if (!text) return;
+    
+    // Check if we already have a translation for this message in the target language
+    if (translatedMessages[messageId]?.[targetLanguage]) {
+      // We already have a translation, no need to translate again
+      return;
+    }
+    
+    // Show loading state
+    setTranslatedMessages(prev => ({
+      ...prev,
+      [messageId]: {
+        ...(prev[messageId] || {}),
+        [targetLanguage]: { text: '...', loading: true }
+      }
+    }));
+    
+    // Translate the text
+    const translatedText = await translateText(text, targetLanguage);
+    
+    // Update state with translated text
+    setTranslatedMessages(prev => ({
+      ...prev,
+      [messageId]: {
+        ...(prev[messageId] || {}),
+        [targetLanguage]: { text: translatedText, loading: false }
+      }
+    }));
+  };
+  
+  // Toggle message translation
+  const toggleMessageTranslation = (messageId, text) => {
+    // If we don't have a translation yet, get one
+    if (!translatedMessages[messageId]?.[targetLanguage]) {
+      handleTranslateMessage(messageId, text);
+    }
+    
+    // Toggle showing the translation for this message
+    setTranslatedMessages(prev => {
+      const messageTrans = prev[messageId] || {};
+      const isCurrentlyShowing = messageTrans.isShowing;
+      
+      return {
+        ...prev,
+        [messageId]: {
+          ...messageTrans,
+          isShowing: !isCurrentlyShowing
+        }
+      };
+    });
+  };
+  
+  // Check if a message is currently showing its translation
+  const isShowingTranslation = (messageId) => {
+    return translatedMessages[messageId]?.isShowing;
+  };
+  
+  // Get the translated text for a message
+  const getTranslatedText = (messageId, originalText) => {
+    const messageTrans = translatedMessages[messageId];
+    if (!messageTrans || !messageTrans.isShowing) return originalText;
+    
+    const translation = messageTrans[targetLanguage];
+    if (!translation) return originalText;
+    
+    return translation.loading ? 'Translating...' : translation.text;
+  };
+  
+  // Render a translation button for a message
+  const renderTranslationButton = (message) => {
+    if (!message.text) return null;
+    
+    const isShowing = isShowingTranslation(message.id);
+    
+    return (
+      <button
+        onClick={() => toggleMessageTranslation(message.id, message.text)}
+        className="text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 flex items-center mt-1"
+        title={isShowing ? "Show original" : "Translate message"}
+      >
+        <FiGlobe size={12} className="mr-1" />
+        {isShowing ? "Show original" : "Translate"}
+      </button>
+    );
+  };
+  
+  // Add language selector to menu
+  const renderLanguageSelector = () => {
+    return (
+      <div className="relative group">
+        <button
+          className="flex items-center space-x-1 text-sm text-gray-700 dark:text-gray-300"
+          title="Change translation language"
+        >
+          <FiGlobe size={16} />
+          <span>{availableLanguages.find(lang => lang.code === targetLanguage)?.name || 'English'}</span>
+        </button>
+        
+        <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border border-gray-200 dark:border-gray-700 hidden group-hover:block">
+          <div className="py-1 max-h-48 overflow-y-auto">
+            {availableLanguages.map(lang => (
+              <button
+                key={lang.code}
+                className={`flex w-full items-center px-4 py-2 text-sm ${
+                  targetLanguage === lang.code
+                    ? 'bg-primary-50 dark:bg-primary-900 text-primary-700 dark:text-primary-300'
+                    : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+                }`}
+                onClick={() => setTargetLanguage(lang.code)}
+              >
+                {lang.name}
+                {targetLanguage === lang.code && (
+                  <span className="ml-auto">✓</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       {/* Chat Header */}
@@ -1734,6 +1919,18 @@ const ChatRoom = () => {
                 >
                   <FiLogOut className="mr-2" /> Leave Room
                 </button>
+                
+                <button
+                  className="flex w-full items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  onClick={() => {
+                    // Show language selection dialog or toggle dropdown
+                    // This would expand to show the language selector
+                    // For simplicity, we can just use the renderLanguageSelector directly in this menu
+                  }}
+                >
+                  <FiGlobe className="mr-2" /> Translate Messages
+                </button>
+                {renderLanguageSelector()}
               </div>
             </div>
           )}
