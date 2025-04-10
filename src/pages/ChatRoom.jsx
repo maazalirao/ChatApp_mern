@@ -64,7 +64,8 @@ import {
   FiBellOff,
   FiCalendar,
   FiGlobe,
-  FiBookmark
+  FiBookmark,
+  FiShare
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -148,6 +149,9 @@ const ChatRoom = () => {
   const [targetLanguage, setTargetLanguage] = useState(localStorage.getItem('targetLanguage') || 'en');
   const [bookmarkedMessages, setBookmarkedMessages] = useState([]);
   const [showBookmarks, setShowBookmarks] = useState(false);
+  const [showForwardDialog, setShowForwardDialog] = useState(false);
+  const [forwardMessage, setForwardMessage] = useState(null);
+  const [forwardToRoom, setForwardToRoom] = useState('');
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -1994,6 +1998,211 @@ const ChatRoom = () => {
     );
   };
   
+  // Handle opening the forward dialog
+  const handleOpenForward = (message) => {
+    setForwardMessage(message);
+    setShowForwardDialog(true);
+    setSwipedMessageId(null); // Close any open swipe actions
+  };
+  
+  // Forward message to selected room
+  const handleForwardMessage = () => {
+    if (!forwardMessage || !forwardToRoom) return;
+    
+    // Create the forwarded message
+    const forwardedMessage = {
+      text: forwardMessage.text,
+      type: forwardMessage.type,
+      forwardedFrom: {
+        roomName: roomInfo?.name || 'Unknown Room',
+        username: forwardMessage.user?.username || 'Unknown User'
+      }
+    };
+    
+    // Send the forwarded message to the selected room
+    socket.emit('send_message', {
+      roomId: forwardToRoom,
+      ...forwardedMessage
+    });
+    
+    // Reset state
+    setShowForwardDialog(false);
+    setForwardMessage(null);
+    setForwardToRoom('');
+    
+    // Show feedback to user
+    showToast('Message forwarded');
+  };
+  
+  // Forward media messages (images, files, etc.)
+  const handleForwardMediaMessage = () => {
+    if (!forwardMessage || !forwardToRoom) return;
+    
+    // For media messages, we need to include all the media details
+    const messageToForward = {
+      ...forwardMessage,
+      roomId: forwardToRoom,
+      forwardedFrom: {
+        roomName: roomInfo?.name || 'Unknown Room',
+        username: forwardMessage.user?.username || 'Unknown User'
+      },
+      timestamp: new Date().toISOString()
+    };
+    
+    // Remove IDs and other room-specific data
+    delete messageToForward.id;
+    
+    // Send forwarded message event
+    socket.emit('forward_message', messageToForward);
+    
+    // Reset state
+    setShowForwardDialog(false);
+    setForwardMessage(null);
+    setForwardToRoom('');
+    
+    // Show feedback to user
+    showToast('Message forwarded');
+  };
+  
+  // Render forwarded badge if message was forwarded
+  const renderForwardedBadge = (message) => {
+    if (!message.forwardedFrom) return null;
+    
+    return (
+      <div className="text-xs text-gray-500 dark:text-gray-400 italic mb-1 flex items-center">
+        <FiShare size={12} className="mr-1" />
+        Forwarded from {message.forwardedFrom.username} in {message.forwardedFrom.roomName}
+      </div>
+    );
+  };
+  
+  // Render forward button for message actions
+  const renderForwardButton = (message) => {
+    return (
+      <button
+        onClick={() => handleOpenForward(message)}
+        className="p-2 rounded-full bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 hover:opacity-80"
+        title="Forward message"
+      >
+        <FiShare size={16} />
+      </button>
+    );
+  };
+  
+  // Render the forward dialog
+  const renderForwardDialog = () => {
+    if (!showForwardDialog) return null;
+    
+    // Filter out the current room
+    const otherRooms = rooms.filter(room => room.id !== roomId);
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg max-w-md w-full p-4">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Forward Message</h3>
+            <button 
+              onClick={() => {
+                setShowForwardDialog(false);
+                setForwardMessage(null);
+              }}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          {/* Message preview */}
+          {forwardMessage && (
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+              <div className="flex items-center mb-2">
+                <img 
+                  src={forwardMessage.user?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(forwardMessage.user?.username || 'User')}&background=random`}
+                  alt={forwardMessage.user?.username || 'User'} 
+                  className="w-6 h-6 rounded-full mr-2"
+                />
+                <span className="font-medium text-sm text-gray-900 dark:text-white">
+                  {forwardMessage.user?.username || 'Unknown User'}
+                </span>
+              </div>
+              
+              <div className="text-sm text-gray-800 dark:text-gray-200 break-words">
+                {forwardMessage.text}
+              </div>
+            </div>
+          )}
+          
+          {/* Room selection */}
+          <div className="mb-4">
+            <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1">
+              Forward to:
+            </label>
+            
+            {otherRooms.length === 0 ? (
+              <div className="text-sm text-gray-500 dark:text-gray-400 italic">
+                No other rooms available
+              </div>
+            ) : (
+              <div className="max-h-48 overflow-y-auto border border-gray-200 dark:border-gray-700 rounded-md">
+                {otherRooms.map(room => (
+                  <button
+                    key={room.id}
+                    onClick={() => setForwardToRoom(room.id)}
+                    className={`flex items-center p-3 w-full text-left ${
+                      forwardToRoom === room.id 
+                        ? 'bg-primary-50 dark:bg-primary-900' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium mr-3">
+                      {room.name?.charAt(0).toUpperCase() || '?'}
+                    </div>
+                    <div className="flex-1">
+                      <div className="font-medium text-gray-900 dark:text-white">
+                        {room.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {room.participants || 0} participants
+                      </div>
+                    </div>
+                    {forwardToRoom === room.id && (
+                      <div className="text-primary-500 dark:text-primary-400">
+                        <FiCheck size={16} />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end">
+            <button
+              onClick={() => {
+                setShowForwardDialog(false);
+                setForwardMessage(null);
+              }}
+              className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-md mr-2 hover:bg-gray-300 dark:hover:bg-gray-600"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={forwardMessage?.type === 'text' ? handleForwardMessage : handleForwardMediaMessage}
+              disabled={!forwardToRoom}
+              className={`px-4 py-2 rounded-md text-white ${
+                !forwardToRoom 
+                  ? 'bg-gray-400 cursor-not-allowed' 
+                  : 'bg-primary-500 hover:bg-primary-600'
+              }`}
+            >
+              Forward
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       {/* Chat Header */}
@@ -2082,6 +2291,9 @@ const ChatRoom = () => {
       
       {/* Render the bookmarks panel */}
       {renderBookmarksPanel()}
+      
+      {/* Render the forward dialog */}
+      {renderForwardDialog()}
       
       {/* Rest of your existing code - add bookmark button to message swipe actions where needed */}
       {/* Existing pinned messages panel, chat container, etc. */}
