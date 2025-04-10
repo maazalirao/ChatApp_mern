@@ -61,7 +61,8 @@ import {
   FiMinimize,
   FiPrinter,
   FiBell,
-  FiBellOff
+  FiBellOff,
+  FiCalendar
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -136,6 +137,11 @@ const ChatRoom = () => {
     localStorage.getItem('chatSoundEnabled') !== 'false' // default to true
   );
   const [readReceipts, setReadReceipts] = useState({});
+  const [showScheduler, setShowScheduler] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledMessages, setScheduledMessages] = useState([]);
+  const [showScheduledList, setShowScheduledList] = useState(false);
   
   // Sound effects
   const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
@@ -1514,6 +1520,112 @@ const ChatRoom = () => {
     );
   };
 
+  // Initialize scheduled messages from localStorage
+  useEffect(() => {
+    try {
+      const savedMessages = localStorage.getItem('scheduledMessages');
+      if (savedMessages) {
+        const parsedMessages = JSON.parse(savedMessages);
+        // Filter out messages for this room only
+        const roomScheduledMessages = parsedMessages.filter(msg => msg.roomId === roomId);
+        setScheduledMessages(roomScheduledMessages);
+      }
+    } catch (error) {
+      console.error('Error loading scheduled messages:', error);
+    }
+  }, [roomId]);
+  
+  // Check for messages to send every minute
+  useEffect(() => {
+    const checkScheduledMessages = () => {
+      const now = new Date();
+      const messagesToSend = scheduledMessages.filter(msg => {
+        const scheduleTime = new Date(msg.scheduledFor);
+        return scheduleTime <= now && msg.roomId === roomId;
+      });
+      
+      // Send any messages whose time has come
+      if (messagesToSend.length > 0) {
+        messagesToSend.forEach(msg => {
+          sendMessage(roomId, msg.text);
+          showToast('Scheduled message sent');
+        });
+        
+        // Remove sent messages from scheduled list
+        const updatedMessages = scheduledMessages.filter(msg => 
+          !messagesToSend.some(sendMsg => sendMsg.id === msg.id)
+        );
+        
+        setScheduledMessages(updatedMessages);
+        localStorage.setItem('scheduledMessages', JSON.stringify(updatedMessages));
+      }
+    };
+    
+    // Check right away when component mounts
+    checkScheduledMessages();
+    
+    // Then check every 30 seconds
+    const interval = setInterval(checkScheduledMessages, 30000);
+    
+    return () => clearInterval(interval);
+  }, [scheduledMessages, roomId, sendMessage]);
+  
+  // Schedule a message for future delivery
+  const scheduleMessage = () => {
+    if (!message.trim()) {
+      showToast('Cannot schedule an empty message', 'error');
+      return;
+    }
+    
+    const scheduleDateTimeStr = `${scheduledDate}T${scheduledTime}`;
+    const scheduleDateTime = new Date(scheduleDateTimeStr);
+    
+    if (isNaN(scheduleDateTime.getTime())) {
+      showToast('Invalid date or time', 'error');
+      return;
+    }
+    
+    if (scheduleDateTime <= new Date()) {
+      showToast('Schedule time must be in the future', 'error');
+      return;
+    }
+    
+    const scheduledMsg = {
+      id: `scheduled-${Date.now()}`,
+      text: message.trim(),
+      roomId,
+      createdAt: new Date().toISOString(),
+      scheduledFor: scheduleDateTime.toISOString(),
+      userId: currentUser.id
+    };
+    
+    const updatedScheduled = [...scheduledMessages, scheduledMsg];
+    setScheduledMessages(updatedScheduled);
+    localStorage.setItem('scheduledMessages', JSON.stringify(updatedScheduled));
+    
+    // Reset form
+    setMessage('');
+    setShowScheduler(false);
+    setScheduledDate('');
+    setScheduledTime('');
+    
+    showToast('Message scheduled for ' + scheduleDateTime.toLocaleString());
+  };
+  
+  // Cancel a scheduled message
+  const cancelScheduledMessage = (id) => {
+    const updatedMessages = scheduledMessages.filter(msg => msg.id !== id);
+    setScheduledMessages(updatedMessages);
+    localStorage.setItem('scheduledMessages', JSON.stringify(updatedMessages));
+    showToast('Scheduled message cancelled');
+  };
+  
+  // Format a date for display
+  const formatScheduledDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleString();
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50 dark:bg-gray-900">
       {/* Chat Header */}
@@ -1728,34 +1840,141 @@ const ChatRoom = () => {
       >
         {/* ... existing code for chat container ... */}
         
-        {/* In the message actions area, add Pin button */}
-        {/* Find the message actions menu and add this button */}
-        {/* Inside the message actions menu (in the swipe area) */}
-        {/*
-        <button
-          onClick={() => handlePinMessage(msg)}
-          className={`p-2 rounded-full ${
-            pinnedMessages.some(m => m.id === msg.id)
-              ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300'
-              : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-          } hover:opacity-80`}
-          title={pinnedMessages.some(m => m.id === msg.id) ? "Unpin message" : "Pin message"}
-        >
-          <FiPin size={16} />
-        </button>
-        */}
-        
-        {/* Pin Indicator on messages */}
-        {/*
-        {pinnedMessages.some(m => m.id === msg.id) && (
-          <div className="absolute -top-3 left-0 bg-yellow-100 dark:bg-yellow-900 text-yellow-700 dark:text-yellow-300 rounded-full px-2 py-0.5 text-xs flex items-center">
-            <FiPin size={10} className="mr-1" />
-            Pinned
+        {/* Message Input Area */}
+        <div className="chat-input-container">
+          {/* ... existing input elements ... */}
+          
+          {/* Add schedule button to message actions */}
+          <div className="flex items-center space-x-2">
+            {/* Schedule Button */}
+            <button
+              type="button"
+              onClick={() => setShowScheduler(!showScheduler)}
+              className="btn-icon text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              title="Schedule message"
+            >
+              <FiClock size={18} />
+            </button>
+            
+            {/* Show Scheduled Messages Button */}
+            <button
+              type="button"
+              onClick={() => setShowScheduledList(!showScheduledList)}
+              className={`btn-icon relative ${
+                scheduledMessages.length > 0 
+                  ? 'text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300' 
+                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+              title="View scheduled messages"
+            >
+              <FiCalendar size={18} />
+              {scheduledMessages.length > 0 && (
+                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                  {scheduledMessages.length}
+                </span>
+              )}
+            </button>
+            
+            {/* ... existing message action buttons ... */}
           </div>
-        )}
-        */}
-        
-        {/* ... rest of existing code ... */}
+          
+          {/* ... existing input elements ... */}
+          
+          {/* Message Scheduler */}
+          {showScheduler && (
+            <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <h4 className="text-sm font-medium mb-2 flex items-center">
+                <FiClock size={16} className="mr-1" /> Schedule Message
+              </h4>
+              
+              <div className="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-3">
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Date</label>
+                  <input
+                    type="date"
+                    value={scheduledDate}
+                    onChange={(e) => setScheduledDate(e.target.value)}
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white"
+                    min={new Date().toISOString().split('T')[0]}
+                  />
+                </div>
+                
+                <div className="flex-1">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Time</label>
+                  <input
+                    type="time"
+                    value={scheduledTime}
+                    onChange={(e) => setScheduledTime(e.target.value)}
+                    className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-700 dark:text-white"
+                  />
+                </div>
+                
+                <div className="flex items-end">
+                  <button
+                    type="button"
+                    onClick={scheduleMessage}
+                    disabled={!scheduledDate || !scheduledTime || !message.trim()}
+                    className={`p-2 rounded-md text-white text-sm ${
+                      !scheduledDate || !scheduledTime || !message.trim()
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-primary-500 hover:bg-primary-600'
+                    }`}
+                  >
+                    Schedule
+                  </button>
+                  
+                  <button
+                    type="button"
+                    onClick={() => setShowScheduler(false)}
+                    className="p-2 ml-2 rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm hover:bg-gray-300 dark:hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Scheduled Messages List */}
+          {showScheduledList && scheduledMessages.length > 0 && (
+            <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-sm font-medium flex items-center">
+                  <FiCalendar size={16} className="mr-1" /> Scheduled Messages
+                </h4>
+                <button
+                  onClick={() => setShowScheduledList(false)}
+                  className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                >
+                  <FiX size={18} />
+                </button>
+              </div>
+              
+              <div className="max-h-40 overflow-auto">
+                {scheduledMessages.map(msg => (
+                  <div
+                    key={msg.id}
+                    className="mb-2 p-2 bg-white dark:bg-gray-700 rounded-md shadow-sm flex justify-between items-start"
+                  >
+                    <div>
+                      <p className="text-sm text-gray-800 dark:text-gray-200 break-words">{msg.text}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        Scheduled for: {formatScheduledDate(msg.scheduledFor)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => cancelScheduledMessage(msg.id)}
+                      className="ml-2 text-red-500 hover:text-red-700 dark:hover:text-red-400"
+                      title="Cancel scheduled message"
+                    >
+                      <FiX size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
