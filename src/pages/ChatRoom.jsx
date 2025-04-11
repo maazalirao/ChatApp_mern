@@ -3226,6 +3226,106 @@ const ChatRoom = () => {
     );
   };
   
+  // Format date for scheduler display
+  const formatScheduledTime = (dateString) => {
+    const date = new Date(dateString);
+    return format(date, 'PPp'); // Format like "Apr 10, 2023, 3:45 PM"
+  };
+
+  // Check for scheduled messages that need to be sent
+  const checkScheduledMessages = () => {
+    const now = new Date();
+    
+    // Find messages that are due to be sent
+    const dueMessages = scheduledMessages.filter(msg => 
+      new Date(msg.scheduledFor) <= now && msg.roomId === roomId
+    );
+    
+    // Send each due message
+    dueMessages.forEach(msg => {
+      sendMessage(msg.roomId, msg.text);
+      playMessageSound();
+    });
+    
+    // Remove sent messages from the scheduled list
+    if (dueMessages.length > 0) {
+      const remainingMessages = scheduledMessages.filter(msg => 
+        !dueMessages.some(dueMsg => dueMsg.id === msg.id)
+      );
+      
+      setScheduledMessages(remainingMessages);
+      localStorage.setItem('scheduledMessages', JSON.stringify(remainingMessages));
+    }
+  };
+
+  // Set up interval to check for scheduled messages
+  useEffect(() => {
+    // Check on component mount
+    checkScheduledMessages();
+    
+    // Set up interval to check every minute
+    const interval = setInterval(checkScheduledMessages, 60000);
+    
+    return () => clearInterval(interval);
+  }, [scheduledMessages, roomId]);
+
+  // Schedule a message for later sending
+  const scheduleMessage = () => {
+    if (!message.trim()) return;
+    
+    // Validate date and time
+    if (!scheduledDate || !scheduledTime) {
+      alert('Please select both date and time for your scheduled message');
+      return;
+    }
+    
+    // Create datetime from date and time inputs
+    const scheduledFor = new Date(`${scheduledDate}T${scheduledTime}`);
+    
+    // Check if the scheduled time is in the future
+    if (scheduledFor <= new Date()) {
+      alert('Please schedule the message for a future time');
+      return;
+    }
+    
+    // Create scheduled message object
+    const scheduledMessage = {
+      id: `scheduled_${Date.now()}`,
+      text: message.trim(),
+      roomId,
+      scheduledFor: scheduledFor.toISOString(),
+      createdAt: new Date().toISOString()
+    };
+    
+    // Add to scheduled messages
+    const updatedScheduledMessages = [...scheduledMessages, scheduledMessage];
+    setScheduledMessages(updatedScheduledMessages);
+    
+    // Save to localStorage
+    localStorage.setItem('scheduledMessages', JSON.stringify(updatedScheduledMessages));
+    
+    // Clear input and close scheduler
+    setMessage('');
+    setScheduledDate('');
+    setScheduledTime('');
+    setShowScheduler(false);
+    
+    // Show confirmation
+    alert(`Message scheduled for ${formatScheduledTime(scheduledFor)}`);
+  };
+
+  // Load scheduled messages from localStorage on mount
+  useEffect(() => {
+    const savedMessages = localStorage.getItem('scheduledMessages');
+    if (savedMessages) {
+      try {
+        setScheduledMessages(JSON.parse(savedMessages));
+      } catch (error) {
+        console.error('Error parsing scheduled messages:', error);
+      }
+    }
+  }, []);
+  
   // Render the chat interface
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -3342,13 +3442,15 @@ const ChatRoom = () => {
                 
                 <button
                   onClick={() => {
-                    setShowScheduledList(true);
-                    setShowMenu(false);
+                    setShowScheduler(true);
+                    setShowEmoji(false);
+                    setShowGifPicker(false);
+                    setShowFormatting(false);
                   }}
                   className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                 >
-                  <FiClock className="mr-2" />
-                  <span>Scheduled Messages</span>
+                  <FiClock size={16} className="mr-2" />
+                  <span>Schedule Message</span>
                 </button>
                 
                 <hr className="my-1 border-gray-200 dark:border-gray-700" />
@@ -3670,6 +3772,121 @@ const ChatRoom = () => {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Scheduler */}
+      {showScheduler && (
+        <div className="absolute bottom-20 left-0 right-0 bg-white dark:bg-gray-800 p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-medium">Schedule Message</h3>
+            <button 
+              onClick={() => setShowScheduler(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="mb-3">
+            <label className="block text-sm font-medium mb-1">Message</label>
+            <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded">
+              {message || <span className="text-gray-400 italic">No message entered</span>}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3 mb-4">
+            <div>
+              <label htmlFor="scheduled-date" className="block text-sm font-medium mb-1">Date</label>
+              <input
+                id="scheduled-date"
+                type="date"
+                value={scheduledDate}
+                onChange={(e) => setScheduledDate(e.target.value)}
+                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+              />
+            </div>
+            <div>
+              <label htmlFor="scheduled-time" className="block text-sm font-medium mb-1">Time</label>
+              <input
+                id="scheduled-time"
+                type="time"
+                value={scheduledTime}
+                onChange={(e) => setScheduledTime(e.target.value)}
+                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <button
+              onClick={() => setShowScheduler(false)}
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={scheduleMessage}
+              disabled={!message.trim() || !scheduledDate || !scheduledTime}
+              className={`px-4 py-2 rounded-md text-white ${
+                !message.trim() || !scheduledDate || !scheduledTime
+                  ? 'bg-gray-400 cursor-not-allowed'
+                  : 'bg-primary-500 hover:bg-primary-600'
+              }`}
+            >
+              Schedule
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Scheduled messages list */}
+      {showScheduledList && (
+        <div className="absolute right-4 top-16 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 w-80 max-h-[80vh] overflow-auto">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-medium">Scheduled Messages</h3>
+            <button 
+              onClick={() => setShowScheduledList(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          {scheduledMessages.length === 0 ? (
+            <div className="text-gray-500 dark:text-gray-400 text-center py-4">
+              No scheduled messages
+            </div>
+          ) : (
+            <div>
+              {scheduledMessages
+                .filter(msg => msg.roomId === roomId)
+                .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
+                .map(msg => (
+                  <div key={msg.id} className="border-b border-gray-200 dark:border-gray-700 py-2 last:border-0">
+                    <div className="mb-1 text-sm">{msg.text}</div>
+                    <div className="flex justify-between items-center">
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        <FiClock className="inline mr-1" />
+                        {formatScheduledTime(msg.scheduledFor)}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm('Cancel this scheduled message?')) {
+                            const updatedMessages = scheduledMessages.filter(m => m.id !== msg.id);
+                            setScheduledMessages(updatedMessages);
+                            localStorage.setItem('scheduledMessages', JSON.stringify(updatedMessages));
+                          }
+                        }}
+                        className="text-red-500 hover:text-red-600 text-xs"
+                      >
+                        <FiX size={16} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          )}
         </div>
       )}
     </div>
