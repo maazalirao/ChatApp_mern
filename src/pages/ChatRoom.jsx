@@ -748,7 +748,31 @@ const ChatRoom = () => {
     }
   };
   
-  // Modify the handleSendMessage function to handle replies
+  // Message history
+  const [messageHistory, setMessageHistory] = useState([]);
+  const [historyIndex, setHistoryIndex] = useState(-1);
+
+  // Save sent message to history
+  const saveMessageToHistory = (text) => {
+    if (!text.trim()) return;
+    
+    // Add to the beginning of history
+    setMessageHistory(prev => {
+      // Deduplicate
+      const newHistory = [
+        text,
+        ...prev.filter(msg => msg !== text)
+      ];
+      
+      // Limit to 20 messages
+      return newHistory.slice(0, 20);
+    });
+    
+    // Reset history index
+    setHistoryIndex(-1);
+  };
+
+  // Updated message send handler to save to history
   const handleSendMessage = (e) => {
     e.preventDefault();
     
@@ -764,6 +788,9 @@ const ChatRoom = () => {
     setIsSending(true);
     
     try {
+      // Save to history before sending
+      saveMessageToHistory(message);
+      
       // Send message
       sendMessage(roomId, message.trim());
       
@@ -3506,6 +3533,40 @@ const ChatRoom = () => {
   };
   
   const MAX_MESSAGE_LENGTH = 500;
+  
+  // Handle up/down arrow keys to navigate history
+  const handleHistoryNavigation = (e) => {
+    // Handle up arrow to navigate backward in history
+    if (e.key === 'ArrowUp' && !e.shiftKey && messageHistory.length > 0) {
+      e.preventDefault();
+      
+      // First press should go to most recent message
+      const newIndex = historyIndex < messageHistory.length - 1 ? historyIndex + 1 : historyIndex;
+      setHistoryIndex(newIndex);
+      
+      // Set input to selected historical message
+      setMessage(messageHistory[newIndex] || '');
+    }
+    
+    // Handle down arrow to navigate forward in history
+    if (e.key === 'ArrowDown' && !e.shiftKey && historyIndex > -1) {
+      e.preventDefault();
+      
+      const newIndex = historyIndex - 1;
+      setHistoryIndex(newIndex);
+      
+      // Set input to selected historical message, or clear if we're back to current
+      setMessage(newIndex >= 0 ? messageHistory[newIndex] : '');
+      
+      // Move cursor to end of input
+      setTimeout(() => {
+        if (messageInputRef.current) {
+          const length = messageInputRef.current.value.length;
+          messageInputRef.current.setSelectionRange(length, length);
+        }
+      }, 0);
+    }
+  };
   
   // Render the chat interface
   return (
