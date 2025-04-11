@@ -2856,6 +2856,259 @@ const ChatRoom = () => {
     }
   };
   
+  // Voice recording functions
+  const startRecording = async () => {
+    try {
+      // Request microphone permission
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      
+      // Create media recorder
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+      
+      // Set up visualizer
+      const audioContext = audioContextRef.current;
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      
+      // Start recording
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingDuration(0);
+      
+      // Timer for recording duration
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+      
+      // Get data when available
+      mediaRecorder.ondataavailable = (e) => {
+        audioChunksRef.current.push(e.data);
+      };
+      
+      // When recording stops
+      mediaRecorder.onstop = () => {
+        // Create audio blob
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/mp3' });
+        
+        // Create a new audio recording ID
+        const recordingId = `rec_${Date.now()}`;
+        
+        // Save to recordings state
+        setRecordings(prev => ({
+          ...prev,
+          [recordingId]: {
+            url: URL.createObjectURL(audioBlob),
+            blob: audioBlob,
+            duration: recordingDuration
+          }
+        }));
+        
+        // Send the voice message
+        sendVoiceMessage(recordingId);
+        
+        // Reset state
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        setIsRecording(false);
+        setRecordingDuration(0);
+        
+        // Stop all tracks in the stream
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert(`Unable to access microphone: ${error.message}`);
+      setIsRecording(false);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      // Stop the media recorder
+      mediaRecorderRef.current.stop();
+      
+      // Clear the recording data
+      audioChunksRef.current = [];
+      
+      // Clear the timer
+      clearInterval(recordingTimerRef.current);
+      recordingTimerRef.current = null;
+      
+      // Reset state
+      setIsRecording(false);
+      setRecordingDuration(0);
+    }
+  };
+
+  const formatDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  const sendVoiceMessage = (recordingId) => {
+    if (!recordings[recordingId]) return;
+    
+    // Create a voice message object
+    const voiceMessage = {
+      id: `voice_${Date.now()}`,
+      roomId,
+      userId: currentUser.id,
+      user: currentUser,
+      timestamp: new Date().toISOString(),
+      type: 'voice',
+      voice: {
+        recordingId,
+        duration: recordings[recordingId].duration
+      },
+      text: `Voice message (${formatDuration(recordings[recordingId].duration)})`
+    };
+    
+    // Add to messages
+    setRoomMessages(prev => [...prev, voiceMessage]);
+    
+    // Convert blob to base64 for transmission
+    const reader = new FileReader();
+    reader.readAsDataURL(recordings[recordingId].blob);
+    reader.onloadend = () => {
+      const base64data = reader.result;
+      
+      // Emit socket event with voice data
+      socket.emit('message', {
+        ...voiceMessage,
+        voice: {
+          ...voiceMessage.voice,
+          data: base64data
+        }
+      });
+    };
+    
+    // Play sound effect
+    playMessageSound();
+  };
+
+  const togglePlayVoiceMessage = (recordingId) => {
+    // If there's already a playing audio, pause it
+    if (playingAudio) {
+      audioPlayerRef.current?.pause();
+      setPlayingAudio(null);
+    }
+    
+    // If the clicked message is not the one that was playing, play it
+    if (recordingId !== playingAudio) {
+      setPlayingAudio(recordingId);
+      
+      // Get the audio URL
+      const audioUrl = recordings[recordingId]?.url;
+      if (!audioUrl) return;
+      
+      // Play the audio
+      if (!audioPlayerRef.current) {
+        audioPlayerRef.current = new Audio(audioUrl);
+      } else {
+        audioPlayerRef.current.src = audioUrl;
+      }
+      
+      audioPlayerRef.current.play();
+      
+      // When audio ends, reset playing state
+      audioPlayerRef.current.onended = () => {
+        setPlayingAudio(null);
+      };
+    }
+  };
+
+  const renderVoiceMessage = (msg) => {
+    if (!msg.voice) return <div>Voice message unavailable</div>;
+    
+    const recordingId = msg.voice.recordingId;
+    const duration = msg.voice.duration;
+    const isPlaying = playingAudio === recordingId;
+    
+    // If we received the voice message but don't have the recording
+    // (this happens when receiving from another user)
+    if (!recordings[recordingId] && msg.voice.data) {
+      // Create blob and URL from the base64 data
+      const byteString = atob(msg.voice.data.split(',')[1]);
+      const mimeString = msg.voice.data.split(',')[0].split(':')[1].split(';')[0];
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+      }
+      const blob = new Blob([ab], { type: mimeString });
+      const url = URL.createObjectURL(blob);
+      
+      // Add to recordings state
+      setRecordings(prev => ({
+        ...prev,
+        [recordingId]: {
+          url,
+          blob,
+          duration
+        }
+      }));
+    }
+    
+    return (
+      <div className="voice-message bg-gray-100 dark:bg-gray-700 rounded-lg p-3 max-w-[240px]">
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => togglePlayVoiceMessage(recordingId)}
+            className="p-2 rounded-full bg-primary-500 text-white"
+          >
+            {isPlaying ? <FiPause size={18} /> : <FiPlay size={18} />}
+          </button>
+          
+          <div className="flex-1">
+            <div className="h-2 bg-gray-200 dark:bg-gray-600 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-primary-500 transition-all duration-300"
+                style={{ 
+                  width: isPlaying ? '100%' : '0%',
+                  animation: isPlaying ? `progress ${duration}s linear` : 'none'
+                }}
+              />
+            </div>
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {formatDuration(duration)}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Create a color palette for themes
+  const colorOptions = [
+    { name: 'indigo', value: 'indigo', class: 'bg-indigo-500' },
+    { name: 'blue', value: 'blue', class: 'bg-blue-500' },
+    { name: 'green', value: 'green', class: 'bg-green-500' },
+    { name: 'red', value: 'red', class: 'bg-red-500' },
+    { name: 'purple', value: 'purple', class: 'bg-purple-500' },
+    { name: 'pink', value: 'pink', class: 'bg-pink-500' },
+    { name: 'yellow', value: 'yellow', class: 'bg-yellow-500' },
+    { name: 'teal', value: 'teal', class: 'bg-teal-500' }
+  ];
+
+  // Update theme color
+  const updateThemeColor = (color) => {
+    setThemeColor(color);
+    localStorage.setItem('themeColor', color);
+    document.documentElement.setAttribute('data-theme', color);
+  };
+  
   // Render the chat interface
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -3202,6 +3455,15 @@ const ChatRoom = () => {
                 >
                   <FiBold size={20} className={showFormatting ? "text-primary-500" : ""} />
                 </button>
+                
+                <button
+                  type="button"
+                  onClick={startRecording}
+                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
+                  title="Record voice message"
+                >
+                  <FiMic size={20} />
+                </button>
 
                 <button
                   type="submit"
@@ -3236,6 +3498,63 @@ const ChatRoom = () => {
         {/* ... existing code ... */}
         
       </div>
+      
+      {/* Theme settings panel */}
+      {showThemeSettings && (
+        <div className="absolute right-4 top-16 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 w-72">
+          <div className="flex justify-between items-center mb-3">
+            <h3 className="font-medium">Appearance</h3>
+            <button 
+              onClick={() => setShowThemeSettings(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-sm mb-2">Theme Mode</p>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => {
+                  setIsDarkMode(false);
+                  localStorage.setItem('darkMode', 'false');
+                }}
+                className={`flex-1 p-2 rounded-md flex items-center justify-center space-x-2 ${!isDarkMode ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600'}`}
+              >
+                <FiSun size={16} />
+                <span>Light</span>
+              </button>
+              <button
+                onClick={() => {
+                  setIsDarkMode(true);
+                  localStorage.setItem('darkMode', 'true');
+                }}
+                className={`flex-1 p-2 rounded-md flex items-center justify-center space-x-2 ${isDarkMode ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600'}`}
+              >
+                <FiMoon size={16} />
+                <span>Dark</span>
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <p className="text-sm mb-2">Accent Color</p>
+            <div className="grid grid-cols-4 gap-2">
+              {colorOptions.map(color => (
+                <button
+                  key={color.value}
+                  onClick={() => updateThemeColor(color.value)}
+                  className={`w-12 h-12 rounded-full ${color.class} flex items-center justify-center ${themeColor === color.value ? 'ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-700' : ''}`}
+                  title={color.name}
+                >
+                  {themeColor === color.value && <FiCheck className="text-white" size={16} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
