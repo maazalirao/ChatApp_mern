@@ -3326,6 +3326,32 @@ const ChatRoom = () => {
     }
   }, []);
   
+  // Language options for translation
+  const languageOptions = [
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'zh', name: 'Chinese' }
+  ];
+
+  // Simple mock translation function (in real app, would use API)
+  const translateMessage = (text, targetLang) => {
+    // This would call a real translation API in production
+    return `[${targetLang}] ${text}`;
+  };
+
+  // Handle translation request
+  const handleTranslate = (messageId, text) => {
+    // In a real app, you'd show a loading state during API call
+    const translated = translateMessage(text, targetLanguage);
+    
+    setTranslatedMessages(prev => ({
+      ...prev,
+      [messageId]: translated
+    }));
+  };
+  
   // Render the chat interface
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
