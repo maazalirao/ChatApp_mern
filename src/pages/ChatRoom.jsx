@@ -169,6 +169,30 @@ const ChatRoom = () => {
   const [themeVariant, setThemeVariant] = useState(localStorage.getItem('themeVariant') || 'default');
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [reactionTarget, setReactionTarget] = useState(null);
+  const [darkMode, setDarkMode] = useState(() => {
+    // Check if user has a saved preference
+    const savedTheme = localStorage.getItem('chatTheme');
+    // Default to system preference if no saved preference
+    return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  
+  // Toggle between light and dark mode
+  const toggleTheme = () => {
+    setDarkMode(prev => {
+      const newTheme = !prev;
+      localStorage.setItem('chatTheme', newTheme ? 'dark' : 'light');
+      return newTheme;
+    });
+  };
+  
+  // Apply theme to document when it changes
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
   
   // Sound effects reference
   const soundEffects = {
@@ -3805,33 +3829,44 @@ const ChatRoom = () => {
   // ... existing code ...
   
   return (
-    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
-      {/* ... existing code ... */}
-      
-      {/* Chat Input with Emoji Picker */}
-      <div className="border-t dark:border-gray-700 bg-white dark:bg-gray-800 p-4 relative">
-        {/* ... existing input form ... */}
-        <div className="flex items-center space-x-2">
-          <button
-            type="button"
-            onClick={() => {
-              setShowEmojiPicker(!showEmojiPicker);
-              setReactionTarget(null);
-            }}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-            aria-label="Insert emoji"
-          >
-            <FiSmile size={20} />
-          </button>
-          
-          {/* ... existing buttons ... */}
-        </div>
+    <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+      <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
+        {/* ... existing code for chat header ... */}
         
-        {/* Emoji Picker */}
-        {showEmojiPicker && renderEmojiPicker()}
+        {/* Theme toggle button - add after other header buttons */}
+        <button
+          onClick={toggleTheme}
+          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+          title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon className="text-gray-600" />}
+        </button>
+        
+        {/* ... existing code ... */}
       </div>
       
-      {/* ... existing code ... */}
+      {/* Update other container classes to support dark mode */}
+      <div className="flex flex-1 overflow-hidden">
+        <div className="flex-1 flex flex-col">
+          <div 
+            className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-800"
+            ref={messagesContainerRef}
+          >
+            {/* ... existing code ... */}
+          </div>
+          
+          <div className="border-t p-3 bg-white dark:bg-gray-900 dark:border-gray-700">
+            {/* ... existing message input area ... */}
+          </div>
+        </div>
+        
+        {/* Update sidebar to support dark mode */}
+        {showUsers && (
+          <div className={`w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col ${showUsers ? 'md:relative absolute right-0 top-0 h-full z-20' : 'hidden'}`}>
+            {/* ... existing user sidebar code ... */}
+          </div>
+        )}
+      </div>
     </div>
   );
 };
