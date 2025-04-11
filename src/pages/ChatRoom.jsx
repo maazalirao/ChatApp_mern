@@ -69,7 +69,7 @@ import {
   FiExternalLink,
   FiFilter
 } from 'react-icons/fi';
-import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft } from "react-icons/bs";
+import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft, BsPin, BsPinFill } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
 import { useAuth } from '../contexts/AuthContext';
 import { useSocket } from '../contexts/SocketContext';
@@ -166,6 +166,9 @@ const ChatRoom = () => {
       end: ''
     }
   });
+  const [themeVariant, setThemeVariant] = useState(localStorage.getItem('themeVariant') || 'default');
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [reactionTarget, setReactionTarget] = useState(null);
   
   // Sound effects reference
   const soundEffects = {
@@ -210,25 +213,48 @@ const ChatRoom = () => {
     };
   }, []);
   
-  // Available theme colors
-  const themeColors = [
-    { name: 'indigo', primary: '#6366f1', dark: '#4338ca', light: '#e0e7ff' },
-    { name: 'violet', primary: '#8b5cf6', dark: '#6d28d9', light: '#ede9fe' },
-    { name: 'pink', primary: '#ec4899', dark: '#be185d', light: '#fce7f3' },
-    { name: 'blue', primary: '#3b82f6', dark: '#1d4ed8', light: '#dbeafe' },
-    { name: 'green', primary: '#10b981', dark: '#047857', light: '#d1fae5' },
-    { name: 'red', primary: '#ef4444', dark: '#b91c1c', light: '#fee2e2' },
-    { name: 'amber', primary: '#f59e0b', dark: '#b45309', light: '#fef3c7' },
-    { name: 'teal', primary: '#14b8a6', dark: '#0f766e', light: '#ccfbf1' },
+  // Available theme variants
+  const themeVariants = [
+    { id: 'default', name: 'Default', description: 'Standard chat theme' },
+    { id: 'comfortable', name: 'Comfortable', description: 'More spacing between elements' },
+    { id: 'compact', name: 'Compact', description: 'Conserves vertical space' },
+    { id: 'bubbly', name: 'Bubbly', description: 'Classic message bubble style' },
+    { id: 'modern', name: 'Modern', description: 'Sleek and minimal design' }
   ];
   
-  // Apply theme color to CSS variables
+  // Available theme colors
+  const themeColors = [
+    { id: 'indigo', name: 'Indigo', color: '#4f46e5' },
+    { id: 'blue', name: 'Blue', color: '#3b82f6' },
+    { id: 'green', name: 'Green', color: '#10b981' },
+    { id: 'rose', name: 'Rose', color: '#f43f5e' },
+    { id: 'purple', name: 'Purple', color: '#8b5cf6' },
+    { id: 'teal', name: 'Teal', color: '#14b8a6' },
+    { id: 'amber', name: 'Amber', color: '#f59e0b' }
+  ];
+  
+  // Update theme settings
+  const handleThemeChange = (variant, color, darkMode) => {
+    let newVariant = variant !== undefined ? variant : themeVariant;
+    let newColor = color !== undefined ? color : themeColor;
+    let newDarkMode = darkMode !== undefined ? darkMode : isDarkMode;
+    
+    setThemeVariant(newVariant);
+    setThemeColor(newColor);
+    setIsDarkMode(newDarkMode);
+    
+    localStorage.setItem('themeVariant', newVariant);
+    localStorage.setItem('themeColor', newColor);
+    localStorage.setItem('darkMode', newDarkMode);
+    
+    // Apply theme classes to body
+    document.body.className = `theme-${newVariant} theme-color-${newColor} ${newDarkMode ? 'dark' : 'light'}`;
+  };
+  
+  // Initialize theme on component mount
   useEffect(() => {
-    document.documentElement.style.setProperty('--color-primary-500', themeColors.find(c => c.name === themeColor)?.primary || '#6366f1');
-    document.documentElement.style.setProperty('--color-primary-700', themeColors.find(c => c.name === themeColor)?.dark || '#4338ca');
-    document.documentElement.style.setProperty('--color-primary-100', themeColors.find(c => c.name === themeColor)?.light || '#e0e7ff');
-    localStorage.setItem('themeColor', themeColor);
-  }, [themeColor]);
+    handleThemeChange(themeVariant, themeColor, isDarkMode);
+  }, []);
   
   // Handle dark mode toggle
   useEffect(() => {
@@ -3254,25 +3280,21 @@ const ChatRoom = () => {
           {receipts.slice(0, 3).map((receipt, index) => (
             <div 
               key={receipt.userId} 
-              className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center overflow-hidden"
-              title={`Read by ${receipt.username}`}
+              className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center text-white text-[8px] border border-white dark:border-gray-900"
+              title={receipt.username}
             >
-              <img 
-                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(receipt.username)}&size=20&background=random`}
-                alt={receipt.username}
-                className="w-full h-full object-cover"
-              />
+              {receipt.username.charAt(0).toUpperCase()}
             </div>
           ))}
-          {receipts.length > 3 && (
-            <div 
-              className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center text-[8px]"
-              title={`Read by ${receipts.length} users`}
-            >
-              +{receipts.length - 3}
-            </div>
-          )}
         </div>
+        {receipts.length > 3 && (
+          <div 
+            className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center text-[8px]"
+            title={`Read by ${receipts.length} users`}
+          >
+            +{receipts.length - 3}
+          </div>
+        )}
       </div>
     );
   };
@@ -3568,22 +3590,247 @@ const ChatRoom = () => {
     }
   };
   
-  // Render the chat interface
-  return (
-    <div className="flex flex-col h-screen">
-      {/* ... existing code ... */}
-
-      {/* Character counter */}
-      <div className={`absolute right-2 bottom-2 text-xs ${
-        message.length > MAX_MESSAGE_LENGTH * 0.8 
-          ? message.length > MAX_MESSAGE_LENGTH 
-            ? 'text-red-500' 
-            : 'text-yellow-500' 
-          : 'text-gray-400'
-      }`}>
-        {message.length}/{MAX_MESSAGE_LENGTH}
+  // Render theme settings panel
+  const renderThemeSettings = () => {
+    return (
+      <div className="absolute top-14 right-0 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-lg w-80 p-4 border border-gray-200 dark:border-gray-700">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="font-medium text-gray-900 dark:text-gray-100">Appearance Settings</h3>
+          <button 
+            onClick={() => setShowThemeSettings(false)}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+        
+        <div className="mb-4">
+          <div className="flex justify-between items-center mb-2">
+            <span className="text-sm text-gray-700 dark:text-gray-300">Theme Mode</span>
+            <button 
+              onClick={() => handleThemeChange(undefined, undefined, !isDarkMode)}
+              className="flex items-center px-3 py-1 rounded-full text-xs font-medium"
+              style={{ backgroundColor: isDarkMode ? '#374151' : '#e5e7eb', color: isDarkMode ? '#f3f4f6' : '#1f2937' }}
+            >
+              {isDarkMode ? <FiMoon className="mr-1" /> : <FiSun className="mr-1" />}
+              {isDarkMode ? 'Dark' : 'Light'}
+            </button>
+          </div>
+        </div>
+        
+        <div className="mb-4">
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Theme Style</h4>
+          <div className="grid grid-cols-2 gap-2">
+            {themeVariants.map(variant => (
+              <button
+                key={variant.id}
+                onClick={() => handleThemeChange(variant.id)}
+                className={`p-2 rounded-md text-xs text-left ${
+                  themeVariant === variant.id 
+                    ? `ring-2 ring-${themeColor}-500 bg-${themeColor}-50 dark:bg-${themeColor}-900 dark:bg-opacity-20` 
+                    : 'bg-gray-100 dark:bg-gray-700'
+                }`}
+              >
+                <div className="font-medium mb-1">{variant.name}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">{variant.description}</div>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Color Accent</h4>
+          <div className="flex flex-wrap gap-2">
+            {themeColors.map(color => (
+              <button
+                key={color.id}
+                onClick={() => handleThemeChange(undefined, color.id)}
+                className={`w-8 h-8 rounded-full ${
+                  themeColor === color.id ? 'ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-600' : ''
+                }`}
+                style={{ backgroundColor: color.color }}
+                title={color.name}
+              />
+            ))}
+          </div>
+        </div>
       </div>
+    );
+  };
 
+  // Add or remove a reaction to a message
+  const handleReaction = (messageId, emoji) => {
+    if (!socket) return;
+    
+    socket.emit('add_reaction', {
+      messageId,
+      roomId,
+      userId: currentUser.id,
+      username: currentUser.username,
+      emoji
+    });
+    
+    setShowReactions(false);
+    setReactionTarget(null);
+  };
+  
+  // Effect to handle clicks outside emoji picker
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target)) {
+        setShowEmojiPicker(false);
+        setShowReactions(false);
+        setReactionTarget(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+  
+  // Listen for reaction updates from server
+  useEffect(() => {
+    if (!socket) return;
+    
+    socket.on('reaction_updated', (data) => {
+      setReactions(prevReactions => ({
+        ...prevReactions,
+        [data.messageId]: data.reactions
+      }));
+    });
+    
+    return () => {
+      socket.off('reaction_updated');
+    };
+  }, [socket]);
+  
+  // Create an emoji picker component
+  const renderEmojiPicker = () => {
+    const emojis = ["👍", "❤️", "😂", "😮", "😢", "😡", "🎉", "👏", "🔥", "✅"];
+    
+    return (
+      <div 
+        ref={emojiPickerRef}
+        className="absolute bottom-16 right-4 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-2 z-50"
+      >
+        <div className="grid grid-cols-5 gap-2">
+          {emojis.map(emoji => (
+            <button
+              key={emoji}
+              className="w-10 h-10 text-xl flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              onClick={() => {
+                if (reactionTarget) {
+                  handleReaction(reactionTarget, emoji);
+                } else {
+                  setMessage(prev => prev + emoji);
+                  setShowEmojiPicker(false);
+                }
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
+  
+  // Render reactions for a message
+  const renderMessageReactions = (message) => {
+    const messageReactions = reactions[message.id] || {};
+    
+    // If no reactions, return null
+    if (Object.keys(messageReactions).length === 0) return null;
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {Object.entries(messageReactions).map(([emoji, users]) => (
+          <button
+            key={emoji}
+            className={`text-xs rounded-full px-2 py-0.5 flex items-center gap-1 border ${
+              users.some(u => u.userId === currentUser.id)
+                ? 'bg-blue-100 border-blue-300 dark:bg-blue-900 dark:border-blue-700'
+                : 'bg-gray-100 border-gray-300 dark:bg-gray-800 dark:border-gray-700'
+            }`}
+            onClick={() => handleReaction(message.id, emoji)}
+            title={users.map(u => u.username).join(', ')}
+          >
+            <span>{emoji}</span>
+            <span>{users.length}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+  
+  // Function to open reaction picker for a specific message
+  const openReactionPicker = (messageId) => {
+    setReactionTarget(messageId);
+    setShowReactions(true);
+    setShowEmojiPicker(true);
+  };
+  
+  // Update message JSX to include reaction button
+  const renderMessage = (message, index) => {
+    // ... existing code ...
+    return (
+      <motion.div
+        // ... existing motion props ...
+      >
+        <div className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}>
+          {/* ... existing message content ... */}
+          
+          {/* Add reaction button */}
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+            <button
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+              onClick={() => openReactionPicker(message.id)}
+              aria-label="Add reaction"
+            >
+              <BsEmojiSmile size={14} />
+            </button>
+          </div>
+        </div>
+        
+        {/* Show message reactions */}
+        {renderMessageReactions(message)}
+        
+        {/* ... existing read receipts ... */}
+      </motion.div>
+    );
+  };
+  
+  // ... existing code ...
+  
+  return (
+    <div className="h-screen flex flex-col bg-gray-50 dark:bg-gray-900">
+      {/* ... existing code ... */}
+      
+      {/* Chat Input with Emoji Picker */}
+      <div className="border-t dark:border-gray-700 bg-white dark:bg-gray-800 p-4 relative">
+        {/* ... existing input form ... */}
+        <div className="flex items-center space-x-2">
+          <button
+            type="button"
+            onClick={() => {
+              setShowEmojiPicker(!showEmojiPicker);
+              setReactionTarget(null);
+            }}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            aria-label="Insert emoji"
+          >
+            <FiSmile size={20} />
+          </button>
+          
+          {/* ... existing buttons ... */}
+        </div>
+        
+        {/* Emoji Picker */}
+        {showEmojiPicker && renderEmojiPicker()}
+      </div>
+      
       {/* ... existing code ... */}
     </div>
   );
