@@ -3505,6 +3505,27 @@ const ChatRoom = () => {
     );
   };
   
+  const MAX_MESSAGE_LENGTH = 500;
+  
   // Render the chat interface
   return (
+    <div className="flex flex-col h-screen">
+      {/* ... existing code ... */}
+
+      {/* Character counter */}
+      <div className={`absolute right-2 bottom-2 text-xs ${
+        message.length > MAX_MESSAGE_LENGTH * 0.8 
+          ? message.length > MAX_MESSAGE_LENGTH 
+            ? 'text-red-500' 
+            : 'text-yellow-500' 
+          : 'text-gray-400'
+      }`}>
+        {message.length}/{MAX_MESSAGE_LENGTH}
+      </div>
+
+      {/* ... existing code ... */}
+    </div>
+  );
+};
+
 export default ChatRoom; 
