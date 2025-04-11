@@ -167,8 +167,14 @@ const ChatRoom = () => {
     }
   });
   
-  // Sound effects
-  const messageSound = useRef(typeof Audio !== 'undefined' ? new Audio('/sounds/message.mp3') : null);
+  // Sound effects reference
+  const soundEffects = {
+    message: useRef(null),
+    notification: useRef(null),
+    sent: useRef(null),
+    join: useRef(null),
+    leave: useRef(null)
+  };
   
   const { roomId } = useParams();
   const { currentUser } = useAuth();
@@ -709,6 +715,39 @@ const ChatRoom = () => {
     }
   };
   
+  // Initialize sound effects
+  useEffect(() => {
+    if (typeof Audio !== 'undefined') {
+      soundEffects.message.current = new Audio('/sounds/message.mp3');
+      soundEffects.notification.current = new Audio('/sounds/notification.mp3');
+      soundEffects.sent.current = new Audio('/sounds/sent.mp3');
+      soundEffects.join.current = new Audio('/sounds/join.mp3');
+      soundEffects.leave.current = new Audio('/sounds/leave.mp3');
+    }
+    
+    return () => {
+      // Cleanup sound effects
+      Object.values(soundEffects).forEach(sound => {
+        if (sound.current) {
+          sound.current.pause();
+          sound.current = null;
+        }
+      });
+    };
+  }, []);
+  
+  // Play sound function with type parameter
+  const playSound = (type) => {
+    if (!soundEnabled) return;
+    
+    const sound = soundEffects[type]?.current;
+    if (sound) {
+      // Reset to start if already playing
+      sound.currentTime = 0;
+      sound.play().catch(err => console.log(`Failed to play ${type} sound:`, err));
+    }
+  };
+  
   // Modify the handleSendMessage function to handle replies
   const handleSendMessage = (e) => {
     e.preventDefault();
@@ -725,26 +764,11 @@ const ChatRoom = () => {
     setIsSending(true);
     
     try {
-      console.log(`Sending message to room ${roomId}: "${message}"`);
-      console.log('Message sent at:', new Date().toISOString());
-      
-      // Add reply information if replying to a message
-      const messageData = {
-        text: message.trim(),
-        roomId,
-        replyTo: replyToMessage ? {
-          id: replyToMessage.id,
-          text: replyToMessage.text?.substring(0, 50) || 'Message',
-          userId: replyToMessage.userId,
-          username: replyToMessage.user?.username || 'User'
-        } : null
-      };
-      
       // Send message
       sendMessage(roomId, message.trim());
       
-      // Play sound effect
-      playMessageSound();
+      // Play sent sound effect
+      playSound('sent');
       
       // Clear input and reply state
       setMessage('');
