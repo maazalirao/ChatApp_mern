@@ -3432,571 +3432,79 @@ const ChatRoom = () => {
     });
   };
   
+  // Connection states
+  const CONNECTION_STATES = {
+    CONNECTED: 'connected',
+    DISCONNECTED: 'disconnected',
+    CONNECTING: 'connecting'
+  };
+
+  // Add connection state
+  const [connectionState, setConnectionState] = useState(
+    socket?.connected ? CONNECTION_STATES.CONNECTED : CONNECTION_STATES.CONNECTING
+  );
+
+  // Track socket connection
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleConnect = () => {
+      setConnectionState(CONNECTION_STATES.CONNECTED);
+      playSound('notification');
+    };
+    
+    const handleDisconnect = () => {
+      setConnectionState(CONNECTION_STATES.DISCONNECTED);
+    };
+    
+    const handleConnecting = () => {
+      setConnectionState(CONNECTION_STATES.CONNECTING);
+    };
+    
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('reconnect_attempt', handleConnecting);
+    
+    return () => {
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('reconnect_attempt', handleConnecting);
+    };
+  }, [socket, playSound]);
+
+  // Connection status component
+  const ConnectionStatus = () => {
+    if (connectionState === CONNECTION_STATES.CONNECTED) {
+      return null; // Don't show anything when connected
+    }
+    
+    return (
+      <div className={`
+        fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50
+        px-4 py-2 rounded-full shadow-lg
+        flex items-center space-x-2
+        ${connectionState === CONNECTION_STATES.CONNECTING
+          ? 'bg-yellow-500 text-yellow-50'
+          : 'bg-red-500 text-red-50'
+        }
+      `}>
+        <div className={`
+          w-2 h-2 rounded-full
+          ${connectionState === CONNECTION_STATES.CONNECTING 
+            ? 'bg-yellow-200 animate-pulse' 
+            : 'bg-red-200'
+          }
+        `}></div>
+        <span>
+          {connectionState === CONNECTION_STATES.CONNECTING
+            ? 'Connecting...'
+            : 'Disconnected. Attempting to reconnect...'
+          }
+        </span>
+      </div>
+    );
+  };
+  
   // Render the chat interface
   return (
-    <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
-      {/* Chat Header */}
-      <div className="py-2 px-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shadow-sm">
-        {/* Left side */}
-        <div className="flex items-center space-x-4">
-          <button 
-            onClick={() => navigate('/dashboard')} 
-            className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 md:hidden"
-          >
-            <FiArrowLeft size={24} />
-          </button>
-          
-          <div className="flex flex-col">
-            <h1 className="font-medium text-lg truncate max-w-[150px] md:max-w-xs">
-              {roomInfo?.name || 'Chat Room'}
-            </h1>
-            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
-              <div className="w-2 h-2 rounded-full bg-green-500 mr-1"></div>
-              {roomInfo?.users?.length || 0} online
-            </div>
-          </div>
-        </div>
-        
-        {/* Right side */}
-        <div className="flex items-center space-x-1">
-          <button 
-            onClick={() => setShowSearch(prev => !prev)}
-            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 relative"
-          >
-            <FiSearch size={20} />
-          </button>
-          
-          <button 
-            onClick={() => setShowPinned(prev => !prev)}
-            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 relative"
-          >
-            <FiPin size={20} />
-            {pinnedMessages.length > 0 && (
-              <span className="absolute top-0 right-0 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                {pinnedMessages.length}
-              </span>
-            )}
-          </button>
-
-          <button 
-            onClick={() => setShowUsersList(true)}
-            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
-          >
-            <FiUsers size={20} />
-          </button>
-          
-          <button 
-            onClick={() => setShowMenu(prev => !prev)}
-            className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 relative"
-          >
-            <FiMoreVertical size={20} />
-            {showMenu && (
-              <div className="absolute right-0 top-full mt-2 bg-white dark:bg-gray-800 shadow-lg rounded-lg py-1 w-56 z-50">
-                <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    setShowFilters(true);
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                >
-                  <FiFilter className="mr-2" />
-                  <span>Filter Messages</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setShowMenu(false);
-                    setShowBookmarks(true);
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                >
-                  <FiBookmark className="mr-2" />
-                  <span>Bookmarked Messages</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setShowThemeSettings(prev => !prev);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                >
-                  <FiSettings className="mr-2" />
-                  <span>Appearance</span>
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setIsDarkMode(prev => !prev);
-                    localStorage.setItem('darkMode', !isDarkMode);
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                >
-                  {isDarkMode ? (
-                    <>
-                      <FiSun className="mr-2" />
-                      <span>Light Mode</span>
-                    </>
-                  ) : (
-                    <>
-                      <FiMoon className="mr-2" />
-                      <span>Dark Mode</span>
-                    </>
-                  )}
-                </button>
-                
-                <button
-                  onClick={() => {
-                    setShowScheduler(true);
-                    setShowEmoji(false);
-                    setShowGifPicker(false);
-                    setShowFormatting(false);
-                  }}
-                  className="w-full px-4 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                >
-                  <FiClock size={16} className="mr-2" />
-                  <span>Schedule Message</span>
-                </button>
-                
-                <hr className="my-1 border-gray-200 dark:border-gray-700" />
-                
-                <button
-                  onClick={() => {
-                    handleLeaveRoom();
-                    setShowMenu(false);
-                  }}
-                  className="w-full px-4 py-2 text-left text-red-500 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
-                >
-                  <FiLogOut className="mr-2" />
-                  <span>Leave Room</span>
-                </button>
-              </div>
-            )}
-          </button>
-        </div>
-      </div>
-      
-      {/* Main chat area - flexible height container */}
-      <div className="flex-1 flex overflow-hidden relative">
-        {/* Chat messages panel - scrollable */}
-        <div className="flex-1 flex flex-col overflow-hidden relative">
-          {/* ... existing code ... */}
-          
-          {/* Chat input area */}
-          <div className="border-t border-gray-200 dark:border-gray-700 p-3 bg-white dark:bg-gray-800">
-            {/* Reply preview */}
-            {replyToMessage && (
-              <div className="flex items-center mb-2 p-2 rounded bg-gray-100 dark:bg-gray-700">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                    <FiCornerUpRight className="mr-1" size={12} />
-                    <span className="font-medium mr-1">
-                      {replyToMessage.user?.username || 'User'}:
-                    </span>
-                    <span className="truncate">
-                      {replyToMessage.text || 'Message'}
-                    </span>
-                  </div>
-                </div>
-                <button 
-                  onClick={cancelReply}
-                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                >
-                  <FiX size={16} />
-                </button>
-              </div>
-            )}
-            
-            {/* Message formatting toolbar */}
-            {showFormatting && (
-              <div className="flex space-x-2 mb-2 p-2 bg-gray-100 dark:bg-gray-700 rounded">
-                <button 
-                  onClick={() => applyFormatting('bold')} 
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                  title="Bold"
-                >
-                  <FiBold size={16} />
-                </button>
-                <button 
-                  onClick={() => applyFormatting('italic')} 
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                  title="Italic"
-                >
-                  <FiItalic size={16} />
-                </button>
-                <button 
-                  onClick={() => applyFormatting('underline')} 
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                  title="Underline"
-                >
-                  <FiUnderline size={16} />
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowCodeEditor(true);
-                    setShowFormatting(false);
-                  }} 
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                  title="Code Snippet"
-                >
-                  <FiCode size={16} />
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowPollCreator(true);
-                    setShowFormatting(false);
-                  }} 
-                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600"
-                  title="Create Poll"
-                >
-                  <FiPieChart size={16} />
-                </button>
-              </div>
-            )}
-            
-            {/* Emoji picker */}
-            {showEmoji && (
-              <div className="absolute bottom-20 right-16 z-10 shadow-lg rounded-lg overflow-hidden">
-                <Picker 
-                  data={data} 
-                  onEmojiSelect={handleEmojiSelect}
-                  theme={isDarkMode ? "dark" : "light"}
-                  previewPosition="none"
-                  skinTonePosition="none"
-                  set="native"
-                />
-              </div>
-            )}
-            
-            {/* Message input area */}
-            <form onSubmit={handleSendMessage} className="flex items-end">
-              <div className="flex-1 relative">
-                <textarea
-                  ref={messageInputRef}
-                  value={message}
-                  onChange={e => {
-                    setMessage(e.target.value);
-                    handleTyping();
-                    
-                    // Check for mention
-                    const text = e.target.value;
-                    const cursorPos = e.target.selectionStart;
-                    setCursorPosition(cursorPos);
-                    
-                    // Find @ before cursor
-                    const textBeforeCursor = text.substring(0, cursorPos);
-                    const atIndex = textBeforeCursor.lastIndexOf('@');
-                    
-                    if (atIndex !== -1 && atIndex > textBeforeCursor.lastIndexOf(' ')) {
-                      const mentionText = textBeforeCursor.substring(atIndex + 1);
-                      setMentionSearch(mentionText);
-                      setShowMentions(true);
-                      setMentionIndex(0);
-                    } else {
-                      setShowMentions(false);
-                    }
-                  }}
-                  placeholder="Type a message..."
-                  className="w-full border rounded-lg py-2 px-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none dark:bg-gray-700 dark:border-gray-600"
-                  rows="1"
-                  style={{ maxHeight: '120px', minHeight: '40px' }}
-                  onKeyDown={e => {
-                    handleMentionKeyDown(e);
-                    handleKeyDown(e);
-                  }}
-                />
-                
-                {/* Character limit indicator */}
-                <div className="absolute bottom-1 right-2 text-xs text-gray-400">
-                  {message.length > 400 ? (
-                    <span className={message.length > 500 ? 'text-red-500' : 'text-yellow-500'}>
-                      {message.length}/500
-                    </span>
-                  ) : null}
-                </div>
-                
-                {/* Mentions dropdown */}
-                {showMentions && filteredUsers.length > 0 && (
-                  <div className="absolute bottom-full mb-1 left-0 bg-white dark:bg-gray-800 shadow-lg rounded-lg overflow-hidden z-10 max-h-48 overflow-y-auto w-64">
-                    {filteredUsers.map((user, index) => (
-                      <div
-                        key={user.id}
-                        className={`
-                          p-2 cursor-pointer flex items-center
-                          ${index === mentionIndex ? 'bg-gray-100 dark:bg-gray-700' : ''}
-                          hover:bg-gray-100 dark:hover:bg-gray-700
-                        `}
-                        onClick={() => insertMention(user)}
-                      >
-                        <img
-                          src={user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
-                          alt={user.username}
-                          className="h-6 w-6 rounded-full mr-2"
-                        />
-                        <div className="text-sm">{user.username}</div>
-                        {user.status && (
-                          <div className="ml-auto text-xs text-gray-500">{user.status}</div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              
-              {/* Message action buttons */}
-              <div className="flex items-center pl-2">
-                <button
-                  type="button"
-                  onClick={toggleEmojiPicker}
-                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
-                  title="Add emoji"
-                >
-                  <FiSmile size={20} className={showEmoji ? "text-primary-500" : ""} />
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGifPicker(prev => !prev);
-                    setShowEmoji(false);
-                    setShowFormatting(false);
-                  }}
-                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
-                  title="Add GIF"
-                >
-                  <RiGifLine size={20} className={showGifPicker ? "text-primary-500" : ""} />
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowFormatting(prev => !prev);
-                    setShowEmoji(false);
-                    setShowGifPicker(false);
-                  }}
-                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
-                  title="Formatting options"
-                >
-                  <FiBold size={20} className={showFormatting ? "text-primary-500" : ""} />
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={startRecording}
-                  className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 mr-1"
-                  title="Record voice message"
-                >
-                  <FiMic size={20} />
-                </button>
-
-                <button
-                  type="submit"
-                  disabled={!message.trim() || isSending}
-                  className={`
-                    p-2 rounded-full ml-1
-                    ${!message.trim() || isSending ? 
-                      'bg-gray-300 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed' : 
-                      'bg-primary-500 text-white hover:bg-primary-600'
-                    }
-                    transition-colors
-                  `}
-                  title="Send message"
-                >
-                  <FiSend size={20} />
-                </button>
-              </div>
-            </form>
-            
-            {/* Typing indicator - replace with animated version */}
-            {typingUsers && typingUsers.length > 0 && typingUsers[0] !== currentUser.username && (
-              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
-                {typingUsers.length === 1 ? 
-                  `${typingUsers[0]} is typing...` : 
-                  `${typingUsers.length} people are typing...`
-                }
-              </div>
-            )}
-          </div>
-        </div>
-        
-        {/* ... existing code ... */}
-        
-      </div>
-      
-      {/* Theme settings panel */}
-      {showThemeSettings && (
-        <div className="absolute right-4 top-16 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 w-72">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-medium">Appearance</h3>
-            <button 
-              onClick={() => setShowThemeSettings(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <FiX size={20} />
-            </button>
-          </div>
-          
-          <div className="mb-4">
-            <p className="text-sm mb-2">Theme Mode</p>
-            <div className="flex space-x-2">
-              <button
-                onClick={() => {
-                  setIsDarkMode(false);
-                  localStorage.setItem('darkMode', 'false');
-                }}
-                className={`flex-1 p-2 rounded-md flex items-center justify-center space-x-2 ${!isDarkMode ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600'}`}
-              >
-                <FiSun size={16} />
-                <span>Light</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsDarkMode(true);
-                  localStorage.setItem('darkMode', 'true');
-                }}
-                className={`flex-1 p-2 rounded-md flex items-center justify-center space-x-2 ${isDarkMode ? 'bg-gray-200 dark:bg-gray-700' : 'bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600'}`}
-              >
-                <FiMoon size={16} />
-                <span>Dark</span>
-              </button>
-            </div>
-          </div>
-          
-          <div>
-            <p className="text-sm mb-2">Accent Color</p>
-            <div className="grid grid-cols-4 gap-2">
-              {colorOptions.map(color => (
-                <button
-                  key={color.value}
-                  onClick={() => updateThemeColor(color.value)}
-                  className={`w-12 h-12 rounded-full ${color.class} flex items-center justify-center ${themeColor === color.value ? 'ring-2 ring-offset-2 ring-gray-400 dark:ring-gray-700' : ''}`}
-                  title={color.name}
-                >
-                  {themeColor === color.value && <FiCheck className="text-white" size={16} />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scheduler */}
-      {showScheduler && (
-        <div className="absolute bottom-20 left-0 right-0 bg-white dark:bg-gray-800 p-4 border-t border-gray-200 dark:border-gray-700 shadow-lg">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-medium">Schedule Message</h3>
-            <button 
-              onClick={() => setShowScheduler(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <FiX size={20} />
-            </button>
-          </div>
-          
-          <div className="mb-3">
-            <label className="block text-sm font-medium mb-1">Message</label>
-            <div className="bg-gray-100 dark:bg-gray-700 p-2 rounded">
-              {message || <span className="text-gray-400 italic">No message entered</span>}
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div>
-              <label htmlFor="scheduled-date" className="block text-sm font-medium mb-1">Date</label>
-              <input
-                id="scheduled-date"
-                type="date"
-                value={scheduledDate}
-                onChange={(e) => setScheduledDate(e.target.value)}
-                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
-              />
-            </div>
-            <div>
-              <label htmlFor="scheduled-time" className="block text-sm font-medium mb-1">Time</label>
-              <input
-                id="scheduled-time"
-                type="time"
-                value={scheduledTime}
-                onChange={(e) => setScheduledTime(e.target.value)}
-                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-primary-500 dark:bg-gray-700 dark:border-gray-600"
-              />
-            </div>
-          </div>
-          
-          <div className="flex justify-end space-x-2">
-            <button
-              onClick={() => setShowScheduler(false)}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={scheduleMessage}
-              disabled={!message.trim() || !scheduledDate || !scheduledTime}
-              className={`px-4 py-2 rounded-md text-white ${
-                !message.trim() || !scheduledDate || !scheduledTime
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-primary-500 hover:bg-primary-600'
-              }`}
-            >
-              Schedule
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Scheduled messages list */}
-      {showScheduledList && (
-        <div className="absolute right-4 top-16 z-50 bg-white dark:bg-gray-800 shadow-lg rounded-lg p-4 w-80 max-h-[80vh] overflow-auto">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-medium">Scheduled Messages</h3>
-            <button 
-              onClick={() => setShowScheduledList(false)}
-              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-            >
-              <FiX size={20} />
-            </button>
-          </div>
-          
-          {scheduledMessages.length === 0 ? (
-            <div className="text-gray-500 dark:text-gray-400 text-center py-4">
-              No scheduled messages
-            </div>
-          ) : (
-            <div>
-              {scheduledMessages
-                .filter(msg => msg.roomId === roomId)
-                .sort((a, b) => new Date(a.scheduledFor) - new Date(b.scheduledFor))
-                .map(msg => (
-                  <div key={msg.id} className="border-b border-gray-200 dark:border-gray-700 py-2 last:border-0">
-                    <div className="mb-1 text-sm">{msg.text}</div>
-                    <div className="flex justify-between items-center">
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        <FiClock className="inline mr-1" />
-                        {formatScheduledTime(msg.scheduledFor)}
-                      </div>
-                      <button
-                        onClick={() => {
-                          if (confirm('Cancel this scheduled message?')) {
-                            const updatedMessages = scheduledMessages.filter(m => m.id !== msg.id);
-                            setScheduledMessages(updatedMessages);
-                            localStorage.setItem('scheduledMessages', JSON.stringify(updatedMessages));
-                          }
-                        }}
-                        className="text-red-500 hover:text-red-600 text-xs"
-                      >
-                        <FiX size={16} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
 export default ChatRoom; 
