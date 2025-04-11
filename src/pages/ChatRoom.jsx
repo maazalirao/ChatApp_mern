@@ -3109,6 +3109,123 @@ const ChatRoom = () => {
     document.documentElement.setAttribute('data-theme', color);
   };
   
+  // Mark message as read
+  const markMessageAsRead = (messageId) => {
+    if (!messageId || !socket) return;
+    
+    socket.emit('message_read', {
+      roomId,
+      messageId,
+      userId: currentUser.id,
+      username: currentUser.username
+    });
+  };
+
+  // Process visible messages and mark them as read
+  const processVisibleMessages = (entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const messageId = entry.target.dataset.messageId;
+        if (messageId) {
+          markMessageAsRead(messageId);
+        }
+      }
+    });
+  };
+
+  // Set up intersection observer for read receipts
+  useEffect(() => {
+    const options = {
+      root: null,
+      rootMargin: '0px',
+      threshold: 0.5
+    };
+    
+    const observer = new IntersectionObserver(processVisibleMessages, options);
+    
+    // Get all message elements and observe them
+    const messageElements = document.querySelectorAll('.message-item');
+    messageElements.forEach(el => observer.observe(el));
+    
+    return () => {
+      if (observer) {
+        observer.disconnect();
+      }
+    };
+  }, [roomMessages]);
+
+  // Listen for read receipts
+  useEffect(() => {
+    if (!socket) return;
+    
+    socket.on('message_read', ({ messageId, userId, username }) => {
+      setReadReceipts(prev => {
+        // If this message already has read receipts
+        if (prev[messageId]) {
+          // If this user hasn't already been recorded
+          if (!prev[messageId].some(receipt => receipt.userId === userId)) {
+            return {
+              ...prev,
+              [messageId]: [...prev[messageId], { userId, username }]
+            };
+          }
+        } else {
+          // First read receipt for this message
+          return {
+            ...prev,
+            [messageId]: [{ userId, username }]
+          };
+        }
+        return prev;
+      });
+    });
+    
+    return () => {
+      socket.off('message_read');
+    };
+  }, [socket]);
+
+  // Render read receipts for a message
+  const renderReadReceipts = (message) => {
+    const receipts = readReceipts[message.id] || [];
+    
+    // Don't show anything if no one has read the message
+    if (receipts.length === 0) return null;
+    
+    // Don't show receipts for your own messages if only you have seen it
+    if (message.userId === currentUser.id && receipts.length === 1 && receipts[0].userId === currentUser.id) {
+      return null;
+    }
+    
+    return (
+      <div className="flex items-center mt-1 justify-end">
+        <div className="flex -space-x-2">
+          {receipts.slice(0, 3).map((receipt, index) => (
+            <div 
+              key={receipt.userId} 
+              className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center overflow-hidden"
+              title={`Read by ${receipt.username}`}
+            >
+              <img 
+                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(receipt.username)}&size=20&background=random`}
+                alt={receipt.username}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          ))}
+          {receipts.length > 3 && (
+            <div 
+              className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center text-[8px]"
+              title={`Read by ${receipts.length} users`}
+            >
+              +{receipts.length - 3}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
   // Render the chat interface
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
