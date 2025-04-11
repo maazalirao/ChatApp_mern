@@ -3383,6 +3383,31 @@ const ChatRoom = () => {
     };
   }, []);
   
+  // Quick reaction emojis
+  const quickReactions = [
+    { emoji: '👍', name: 'thumbs_up' },
+    { emoji: '❤️', name: 'heart' },
+    { emoji: '😂', name: 'joy' },
+    { emoji: '😮', name: 'wow' },
+    { emoji: '😢', name: 'sad' },
+    { emoji: '🔥', name: 'fire' }
+  ];
+
+  // Add quick reaction
+  const addQuickReaction = (messageId, emoji) => {
+    const reaction = {
+      emoji,
+      userId: currentUser.id,
+      username: currentUser.username
+    };
+    
+    socket.emit('message_reaction', {
+      roomId,
+      messageId,
+      reaction
+    });
+  };
+  
   // Render the chat interface
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
