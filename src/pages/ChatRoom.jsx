@@ -3352,6 +3352,37 @@ const ChatRoom = () => {
     }));
   };
   
+  // Add keyframes for typing animation
+  useEffect(() => {
+    if (document.getElementById('typing-animation-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'typing-animation-styles';
+    style.innerHTML = `
+      @keyframes typingDot {
+        0%, 100% { opacity: 0.2; transform: translateY(0); }
+        50% { opacity: 1; transform: translateY(-3px); }
+      }
+      .typing-dot {
+        animation-duration: 1s;
+        animation-name: typingDot;
+        animation-iteration-count: infinite;
+      }
+      .typing-dot:nth-child(1) { animation-delay: 0s; }
+      .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+      .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+    `;
+    
+    document.head.appendChild(style);
+    
+    return () => {
+      const styleElement = document.getElementById('typing-animation-styles');
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, []);
+  
   // Render the chat interface
   return (
     <div className="h-screen flex flex-col bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
@@ -3728,7 +3759,7 @@ const ChatRoom = () => {
               </div>
             </form>
             
-            {/* Typing indicator */}
+            {/* Typing indicator - replace with animated version */}
             {typingUsers && typingUsers.length > 0 && typingUsers[0] !== currentUser.username && (
               <div className="mt-1 text-xs text-gray-500 dark:text-gray-400 italic">
                 {typingUsers.length === 1 ? 
