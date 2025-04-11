@@ -67,7 +67,14 @@ import {
   FiBookmark,
   FiShare,
   FiExternalLink,
-  FiFilter
+  FiFilter,
+  FiVolume2,
+  FiVolumeX,
+  FiMusic,
+  FiPlus,
+  FiSkipBack,
+  FiSkipForward,
+  FiRefreshCcw
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft, BsPin, BsPinFill } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -195,7 +202,7 @@ const ChatRoom = () => {
   }, [darkMode]);
   
   // Sound effects reference
-  const soundEffects = {
+  const soundEffectsRefs = {
     message: useRef(null),
     notification: useRef(null),
     sent: useRef(null),
@@ -768,16 +775,16 @@ const ChatRoom = () => {
   // Initialize sound effects
   useEffect(() => {
     if (typeof Audio !== 'undefined') {
-      soundEffects.message.current = new Audio('/sounds/message.mp3');
-      soundEffects.notification.current = new Audio('/sounds/notification.mp3');
-      soundEffects.sent.current = new Audio('/sounds/sent.mp3');
-      soundEffects.join.current = new Audio('/sounds/join.mp3');
-      soundEffects.leave.current = new Audio('/sounds/leave.mp3');
+      soundEffectsRefs.message.current = new Audio('/sounds/message.mp3');
+      soundEffectsRefs.notification.current = new Audio('/sounds/notification.mp3');
+      soundEffectsRefs.sent.current = new Audio('/sounds/sent.mp3');
+      soundEffectsRefs.join.current = new Audio('/sounds/join.mp3');
+      soundEffectsRefs.leave.current = new Audio('/sounds/leave.mp3');
     }
     
     return () => {
       // Cleanup sound effects
-      Object.values(soundEffects).forEach(sound => {
+      Object.values(soundEffectsRefs).forEach(sound => {
         if (sound.current) {
           sound.current.pause();
           sound.current = null;
@@ -790,7 +797,7 @@ const ChatRoom = () => {
   const playSound = (type) => {
     if (!soundEnabled) return;
     
-    const sound = soundEffects[type]?.current;
+    const sound = soundEffectsRefs[type]?.current;
     if (sound) {
       // Reset to start if already playing
       sound.currentTime = 0;
@@ -1690,39 +1697,39 @@ const ChatRoom = () => {
     };
   }, [socket, currentUser]);
   
-  // Render read receipts for messages
-  const renderReadReceipts = (message) => {
-    // Only show read receipts for messages sent by the current user
-    if (message.userId !== currentUser.id) return null;
+  // Render read receipts for a message
+  const renderMessageReadIndicators = (message) => {
+    const receipts = readReceipts[message.id] || [];
     
-    // Get users who have read this message (users with read timestamp after message timestamp)
-    const readers = Object.entries(readReceipts)
-      .filter(([userId, receipt]) => {
-        return new Date(receipt.timestamp) > new Date(message.timestamp);
-      })
-      .map(([userId, receipt]) => receipt);
+    // Don't show anything if no one has read the message
+    if (receipts.length === 0) return null;
     
-    if (readers.length === 0) return null;
+    // Don't show receipts for your own messages if only you have seen it
+    if (message.userId === currentUser.id && receipts.length === 1 && receipts[0].userId === currentUser.id) {
+      return null;
+    }
     
     return (
-      <div className="flex justify-end mt-1">
-        <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-          <span className="mr-1">Read by</span>
-          <div className="flex -space-x-2">
-            {readers.slice(0, 3).map((receipt, index) => (
-              <div 
-                key={index} 
-                className="w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center text-white text-[8px] border border-white dark:border-gray-900"
-                title={receipt.username}
-              >
-                {receipt.username.charAt(0).toUpperCase()}
-              </div>
-            ))}
-          </div>
-          {readers.length > 3 && (
-            <span className="ml-1">+{readers.length - 3}</span>
-          )}
+      <div className="flex items-center mt-1 justify-end">
+        <div className="flex -space-x-2">
+          {receipts.slice(0, 3).map((receipt, index) => (
+            <div 
+              key={receipt.userId} 
+              className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center text-white text-[8px] border border-white dark:border-gray-900"
+              title={receipt.username}
+            >
+              {receipt.username.charAt(0).toUpperCase()}
+            </div>
+          ))}
         </div>
+        {receipts.length > 3 && (
+          <div 
+            className="w-4 h-4 rounded-full border border-white dark:border-gray-800 bg-gray-300 flex items-center justify-center text-[8px]"
+            title={`Read by ${receipts.length} users`}
+          >
+            +{receipts.length - 3}
+          </div>
+        )}
       </div>
     );
   };
@@ -3367,7 +3374,7 @@ const ChatRoom = () => {
   }, [scheduledMessages, roomId]);
 
   // Schedule a message for later sending
-  const scheduleMessage = () => {
+  const handleScheduleNewMessage = () => {
     if (!message.trim()) return;
     
     // Validate date and time
@@ -3827,6 +3834,181 @@ const ChatRoom = () => {
   };
   
   // ... existing code ...
+  
+  // Sound effect related state
+  const [soundEffectsList, setSoundEffectsList] = useState([
+    { id: 'applause', name: 'Applause', url: '/sounds/applause.mp3' },
+    { id: 'drumroll', name: 'Drum Roll', url: '/sounds/drumroll.mp3' },
+    { id: 'tada', name: 'Ta-Da!', url: '/sounds/tada.mp3' },
+    { id: 'laugh', name: 'Laugh', url: '/sounds/laugh.mp3' },
+    { id: 'oops', name: 'Oops', url: '/sounds/oops.mp3' },
+    { id: 'cheer', name: 'Cheer', url: '/sounds/cheer.mp3' }
+  ]);
+  const [showSoundEffects, setShowSoundEffects] = useState(false);
+  const [soundVolume, setSoundVolume] = useState(0.5);
+  const [isSoundMuted, setIsSoundMuted] = useState(false);
+
+  // Play sound effect and send to chat
+  const playSoundEffect = (soundId) => {
+    if (isSoundMuted) return;
+    
+    // Find the sound effect
+    const soundEffect = soundEffectsList.find(sound => sound.id === soundId);
+    if (!soundEffect) return;
+    
+    // Create audio element
+    const audio = new Audio(soundEffect.url);
+    audio.volume = soundVolume;
+    audio.play();
+    
+    // Send sound effect message to chat
+    if (socket) {
+      socket.emit('sound_effect', {
+        roomId,
+        userId: currentUser.id,
+        username: currentUser.username,
+        soundId,
+        soundName: soundEffect.name
+      });
+    }
+  };
+
+  // Listen for sound effects from other users
+  useEffect(() => {
+    if (!socket) return;
+    
+    const handleSoundEffect = ({ userId, username, soundId, soundName }) => {
+      // Don't play our own sound effects (we already played them)
+      if (userId === currentUser.id) return;
+      
+      // Play the sound
+      const soundEffect = soundEffectsList.find(sound => sound.id === soundId);
+      if (soundEffect && !isSoundMuted) {
+        const audio = new Audio(soundEffect.url);
+        audio.volume = soundVolume;
+        audio.play();
+      }
+      
+      // Add a special message to the chat
+      const newMessage = {
+        id: `sound_${Date.now()}`,
+        type: 'sound_effect',
+        userId,
+        username,
+        roomId,
+        soundId,
+        soundName,
+        createdAt: new Date().toISOString()
+      };
+      
+      setRoomMessages(prev => [...prev, newMessage]);
+    };
+    
+    socket.on('sound_effect', handleSoundEffect);
+    
+    return () => {
+      socket.off('sound_effect', handleSoundEffect);
+    };
+  }, [socket, currentUser.id, soundEffectsList, isSoundMuted, soundVolume]);
+
+  // Render sound effect message
+  const renderSoundEffect = (message) => {
+    return (
+      <div className="flex items-center space-x-2 my-2 py-1 px-3 bg-gray-100 dark:bg-gray-800 rounded-lg max-w-xs mx-auto">
+        <FiMusic className="text-primary-500" />
+        <div className="text-sm">
+          <span className="font-medium">{message.username}</span> played sound effect: 
+          <span className="font-medium ml-1">{message.soundName}</span>
+        </div>
+        <button 
+          onClick={() => playSoundEffect(message.soundId)}
+          className="ml-2 text-primary-500 hover:text-primary-600 dark:hover:text-primary-400"
+          title="Play again"
+        >
+          <FiRefreshCcw size={16} />
+        </button>
+      </div>
+    );
+  };
+
+  // Sound effects panel
+  const renderSoundEffectsPanel = () => {
+    if (!showSoundEffects) return null;
+    
+    return (
+      <div className="absolute bottom-16 left-4 z-30 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 p-3 w-72">
+        <div className="flex justify-between items-center mb-3">
+          <h3 className="font-medium text-gray-900 dark:text-gray-100">Sound Effects</h3>
+          <div className="flex items-center">
+            <button 
+              onClick={() => setIsSoundMuted(!isSoundMuted)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 mr-2"
+              title={isSoundMuted ? "Unmute sounds" : "Mute sounds"}
+            >
+              {isSoundMuted ? <FiVolumeX size={18} /> : <FiVolume2 size={18} />}
+            </button>
+            <button 
+              onClick={() => setShowSoundEffects(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-3">
+          <label className="text-xs text-gray-500 dark:text-gray-400 mb-1 block">Volume</label>
+          <input 
+            type="range" 
+            min="0" 
+            max="1" 
+            step="0.1" 
+            value={soundVolume} 
+            onChange={(e) => setSoundVolume(parseFloat(e.target.value))}
+            disabled={isSoundMuted}
+            className="w-full accent-primary-500" 
+          />
+        </div>
+        
+        <div className="grid grid-cols-2 gap-2">
+          {soundEffectsList.map(sound => (
+            <button
+              key={sound.id}
+              onClick={() => playSoundEffect(sound.id)}
+              disabled={isSoundMuted}
+              className="text-left p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors flex items-center space-x-2"
+            >
+              <FiMusic className="text-primary-500" />
+              <span>{sound.name}</span>
+            </button>
+          ))}
+        </div>
+        
+        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+          <button className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 flex items-center">
+            <FiUpload className="mr-1" /> Upload custom sound
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Add sound effects button to the chat input toolbar
+  const renderChatInputToolbar = () => (
+    <div className="flex items-center space-x-2 px-4 py-2 border-t border-gray-200 dark:border-gray-700">
+      {/* ... existing toolbar buttons ... */}
+      
+      <button
+        onClick={() => setShowSoundEffects(!showSoundEffects)}
+        className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700"
+        title="Sound Effects"
+      >
+        <FiMusic size={20} />
+      </button>
+      
+      {/* ... existing toolbar buttons ... */}
+    </div>
+  );
   
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
