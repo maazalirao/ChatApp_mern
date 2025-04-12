@@ -74,7 +74,8 @@ import {
   FiPlus,
   FiSkipBack,
   FiSkipForward,
-  FiRefreshCcw
+  FiRefreshCcw,
+  FiChevronsDown
 } from 'react-icons/fi';
 import { BsEmojiSmile, BsThreeDotsVertical, BsArrowLeft, BsPin, BsPinFill } from "react-icons/bs";
 import { RiGifLine } from "react-icons/ri";
@@ -364,11 +365,26 @@ const ChatRoom = () => {
       
       setAutoScroll(isNearBottom);
       setShowScrollButton(!isNearBottom);
+      
+      if (isNearBottom) {
+        setHasNewMessages(false);
+      }
     };
     
     chatMessages.addEventListener('scroll', handleScroll);
     return () => chatMessages.removeEventListener('scroll', handleScroll);
   }, []);
+  
+  // Detect new messages when not at bottom
+  useEffect(() => {
+    if (!autoScroll && roomMessages.length > 0) {
+      // Check if latest message is from someone else
+      const latestMessage = roomMessages[roomMessages.length - 1];
+      if (latestMessage && latestMessage.userId !== currentUser.id) {
+        setHasNewMessages(true);
+      }
+    }
+  }, [roomMessages, autoScroll, currentUser.id]);
   
   // Scroll to bottom when clicking the scroll button
   const scrollToBottom = () => {
@@ -3999,6 +4015,9 @@ const ChatRoom = () => {
     return format(date, 'PPpp'); // Formats to something like "Apr 20, 2023, 3:45 PM EDT"
   };
   
+  // Add state for new message indicator
+  const [hasNewMessages, setHasNewMessages] = useState(false);
+  
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
@@ -4038,6 +4057,25 @@ const ChatRoom = () => {
           </div>
         )}
       </div>
+      
+      {showScrollButton && (
+        <button 
+          onClick={scrollToBottom}
+          className="fixed bottom-24 right-6 z-10 p-2 rounded-full bg-primary-500 text-white shadow-lg hover:bg-primary-600 transition-all transform hover:scale-110"
+          title="Scroll to latest messages"
+        >
+          {hasNewMessages ? (
+            <div className="relative">
+              <FiChevronsDown className="h-5 w-5" />
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                !
+              </span>
+            </div>
+          ) : (
+            <FiChevronsDown className="h-5 w-5" />
+          )}
+        </button>
+      )}
     </div>
   );
 };
