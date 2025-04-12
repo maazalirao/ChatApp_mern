@@ -4126,6 +4126,48 @@ const ChatRoom = () => {
     document.body.removeChild(textarea);
   };
 
+  // Add state for audio playback speed
+  const [audioPlaybackSpeed, setAudioPlaybackSpeed] = useState(1.0);
+  const audioPlaybackSpeeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+  // Update audio playback speed
+  const changeAudioPlaybackSpeed = (audioElement) => {
+    const currentIndex = audioPlaybackSpeeds.indexOf(audioPlaybackSpeed);
+    const nextIndex = (currentIndex + 1) % audioPlaybackSpeeds.length;
+    const newSpeed = audioPlaybackSpeeds[nextIndex];
+    
+    setAudioPlaybackSpeed(newSpeed);
+    
+    if (audioElement) {
+      audioElement.playbackRate = newSpeed;
+    }
+    
+    showToast(`Playback speed: ${newSpeed}x`);
+  };
+
+  // In the audio message rendering logic
+  <div className="flex items-center space-x-2">
+    <audio 
+      ref={audioPlayerRef}
+      controls
+      className="rounded-lg max-w-full"
+      onLoadedMetadata={(e) => {
+        e.target.playbackRate = audioPlaybackSpeed;
+      }}
+    >
+      <source src={message.audioUrl} type="audio/mpeg" />
+      Your browser does not support the audio element.
+    </audio>
+    
+    <button
+      onClick={() => changeAudioPlaybackSpeed(audioPlayerRef.current)}
+      className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 p-1 rounded-full"
+      title="Change playback speed"
+    >
+      {audioPlaybackSpeed}x
+    </button>
+  </div>
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
