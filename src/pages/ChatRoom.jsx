@@ -4229,88 +4229,122 @@ const ChatRoom = () => {
     );
   };
 
-  return (
-    <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
-      <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
-        {/* ... existing code for chat header ... */}
-        
-        {/* Theme toggle button - add after other header buttons */}
-        <button
-          onClick={toggleTheme}
-          className="p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-          title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
-        >
-          {darkMode ? <FiSun className="text-yellow-400" /> : <FiMoon className="text-gray-600" />}
-        </button>
-        
-        {/* ... existing code ... */}
-      </div>
+  // Add keyboard shortcuts
+  useEffect(() => {
+    const handleKeyboardShortcuts = (e) => {
+      // Only process if not typing in an input or textarea
+      if (
+        e.target.tagName === 'INPUT' ||
+        e.target.tagName === 'TEXTAREA' ||
+        e.target.isContentEditable
+      ) {
+        return;
+      }
       
-      {/* Update other container classes to support dark mode */}
-      <div className="flex flex-1 overflow-hidden">
-        <div className="flex-1 flex flex-col">
-          <div 
-            className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-50 dark:bg-gray-800"
-            ref={messagesContainerRef}
-          >
-            {/* ... existing code ... */}
+      // Ctrl/Cmd + / - Show keyboard shortcuts help
+      if ((e.ctrlKey || e.metaKey) && e.key === '/') {
+        e.preventDefault();
+        setShowKeyboardShortcuts(prev => !prev);
+        return;
+      }
+      
+      // ESC - Close modals, emoji picker, etc.
+      if (e.key === 'Escape') {
+        if (showEmojiPicker) setShowEmojiPicker(false);
+        if (showUsersList) setShowUsersList(false);
+        if (showScheduler) setShowScheduler(false);
+        if (showMenu) setShowMenu(false);
+        if (showKeyboardShortcuts) setShowKeyboardShortcuts(false);
+        return;
+      }
+      
+      // Alt + N - Focus on message input
+      if (e.altKey && e.key === 'n') {
+        e.preventDefault();
+        messageInputRef.current?.focus();
+        return;
+      }
+      
+      // Alt + S - Toggle user sidebar
+      if (e.altKey && e.key === 's') {
+        e.preventDefault();
+        setShowUsersList(prev => !prev);
+        return;
+      }
+      
+      // Alt + D - Back to dashboard
+      if (e.altKey && e.key === 'd') {
+        e.preventDefault();
+        navigate('/');
+        return;
+      }
+      
+      // Alt + E - Open emoji picker
+      if (e.altKey && e.key === 'e') {
+        e.preventDefault();
+        setShowEmojiPicker(prev => !prev);
+        return;
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => {
+      document.removeEventListener('keydown', handleKeyboardShortcuts);
+    };
+  }, [navigate, showEmojiPicker, showMenu, showScheduler, showUsersList, showKeyboardShortcuts]);
+
+  // Add state for keyboard shortcuts help modal
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
+
+  // Render keyboard shortcuts help modal
+  const renderKeyboardShortcutsHelp = () => {
+    if (!showKeyboardShortcuts) return null;
+    
+    const shortcuts = [
+      { key: 'Alt + N', description: 'Focus on message input' },
+      { key: 'Alt + S', description: 'Toggle user sidebar' },
+      { key: 'Alt + D', description: 'Back to dashboard' },
+      { key: 'Alt + E', description: 'Open emoji picker' },
+      { key: 'Esc', description: 'Close modals, emoji picker, etc.' },
+      { key: 'Ctrl/Cmd + /', description: 'Show/hide keyboard shortcuts' }
+    ];
+    
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Keyboard Shortcuts</h3>
+            <button 
+              onClick={() => setShowKeyboardShortcuts(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
           </div>
           
-          <div className="border-t p-3 bg-white dark:bg-gray-900 dark:border-gray-700">
-            {/* ... existing message input area ... */}
+          <div className="space-y-2">
+            {shortcuts.map(shortcut => (
+              <div key={shortcut.key} className="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                <span className="font-medium">{shortcut.key}</span>
+                <span className="text-gray-600 dark:text-gray-400">{shortcut.description}</span>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
+            Press <kbd className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">Ctrl/Cmd + /</kbd> to toggle this help at any time.
           </div>
         </div>
-        
-        {/* Update sidebar to support dark mode */}
-        {showUsers && (
-          <div className={`w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 flex flex-col ${showUsers ? 'md:relative absolute right-0 top-0 h-full z-20' : 'hidden'}`}>
-            {/* ... existing user sidebar code ... */}
-          </div>
-        )}
       </div>
+    );
+  };
+
+  return (
+    <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+      {/* Render keyboard shortcuts help modal if active */}
+      {showKeyboardShortcuts && renderKeyboardShortcutsHelp()}
       
-      {showScrollButton && (
-        <button 
-          onClick={scrollToBottom}
-          className="fixed bottom-24 right-6 z-10 p-2 rounded-full bg-primary-500 text-white shadow-lg hover:bg-primary-600 transition-all transform hover:scale-110"
-          title="Scroll to latest messages"
-        >
-          {hasNewMessages ? (
-            <div className="relative">
-              <FiChevronsDown className="h-5 w-5" />
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-                !
-              </span>
-            </div>
-          ) : (
-            <FiChevronsDown className="h-5 w-5" />
-          )}
-        </button>
-      )}
-      
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full">
-            <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Delete Message</h3>
-            <p className="text-gray-600 dark:text-gray-400 mb-6">Are you sure you want to delete this message? This action cannot be undone.</p>
-            
-            <div className="flex justify-end space-x-3">
-              <button 
-                onClick={() => setShowDeleteConfirm(false)} 
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={confirmDeleteMessage} 
-                className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Rest of your component JSX */}
     </div>
   );
 };
