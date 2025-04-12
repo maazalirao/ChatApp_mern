@@ -4168,6 +4168,67 @@ const ChatRoom = () => {
     </button>
   </div>
 
+  // Add message status constants
+  const MESSAGE_STATUS = {
+    SENDING: 'sending',
+    SENT: 'sent',
+    DELIVERED: 'delivered',
+    READ: 'read',
+    FAILED: 'failed'
+  };
+
+  // Function to render message status
+  const renderMessageStatus = (message) => {
+    if (message.userId !== currentUser.id) return null;
+    
+    const status = message.status || MESSAGE_STATUS.SENT;
+    
+    return (
+      <div className="text-xs text-right mt-1">
+        {status === MESSAGE_STATUS.SENDING && (
+          <span className="text-gray-400">
+            <FiClock className="inline-block mr-1" size={12} />
+            Sending...
+          </span>
+        )}
+        
+        {status === MESSAGE_STATUS.SENT && (
+          <span className="text-gray-400">
+            <FiCheck className="inline-block mr-1" size={12} />
+            Sent
+          </span>
+        )}
+        
+        {status === MESSAGE_STATUS.DELIVERED && (
+          <span className="text-gray-400">
+            <div className="inline-block mr-1 relative">
+              <FiCheck className="inline-block" size={12} />
+              <FiCheck className="inline-block absolute top-0 left-0 -ml-1" size={12} />
+            </div>
+            Delivered
+          </span>
+        )}
+        
+        {status === MESSAGE_STATUS.READ && (
+          <span className="text-blue-500">
+            <div className="inline-block mr-1 relative">
+              <FiCheck className="inline-block" size={12} />
+              <FiCheck className="inline-block absolute top-0 left-0 -ml-1" size={12} />
+            </div>
+            Read
+          </span>
+        )}
+        
+        {status === MESSAGE_STATUS.FAILED && (
+          <span className="text-red-500">
+            <FiAlertCircle className="inline-block mr-1" size={12} />
+            Failed - <button className="underline">Retry</button>
+          </span>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
