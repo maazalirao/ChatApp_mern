@@ -1288,9 +1288,9 @@ const ChatRoom = () => {
         <div className="flex-1 min-w-0">
           <div className="flex items-center">
             <div className="font-medium text-xs">{msg.user?.username || 'User'}</div>
-            <div className="text-xs text-gray-500 ml-1">
-              {format(new Date(msg.timestamp), 'PP')}
-            </div>
+            <span className="text-xs text-gray-500 dark:text-gray-400 ml-2" title={formatFullTimestamp(msg.createdAt)}>
+              {formatMessageTime(msg.createdAt)}
+            </span>
           </div>
           
           <div className="text-sm truncate">
@@ -4009,6 +4009,17 @@ const ChatRoom = () => {
       {/* ... existing toolbar buttons ... */}
     </div>
   );
+  
+  const formatMessageTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return format(date, 'h:mm a');
+  };
+
+  // Add a function to format full timestamp for tooltip
+  const formatFullTimestamp = (timestamp) => {
+    const date = new Date(timestamp);
+    return format(date, 'PPpp'); // Formats to something like "Apr 20, 2023, 3:45 PM EDT"
+  };
   
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
