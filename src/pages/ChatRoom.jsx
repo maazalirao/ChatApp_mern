@@ -4018,6 +4018,39 @@ const ChatRoom = () => {
   // Add state for new message indicator
   const [hasNewMessages, setHasNewMessages] = useState(false);
   
+  // Add state for delete confirmation
+  const [messageToDelete, setMessageToDelete] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  // Function to handle message deletion with confirmation
+  const handleDeleteMessage = (message) => {
+    if (message.userId !== currentUser.id) {
+      showToast("You can only delete your own messages", "error");
+      return;
+    }
+    
+    setMessageToDelete(message);
+    setShowDeleteConfirm(true);
+  };
+
+  // Function to confirm and delete message
+  const confirmDeleteMessage = () => {
+    if (!messageToDelete) return;
+    
+    // Emit message delete event
+    socket.emit('delete_message', {
+      roomId,
+      messageId: messageToDelete.id
+    });
+    
+    // Close dialog
+    setMessageToDelete(null);
+    setShowDeleteConfirm(false);
+    
+    // Show confirmation
+    showToast("Message deleted");
+  };
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
@@ -4075,6 +4108,30 @@ const ChatRoom = () => {
             <FiChevronsDown className="h-5 w-5" />
           )}
         </button>
+      )}
+      
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-sm w-full">
+            <h3 className="text-lg font-medium mb-4 text-gray-900 dark:text-gray-100">Delete Message</h3>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">Are you sure you want to delete this message? This action cannot be undone.</p>
+            
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={() => setShowDeleteConfirm(false)} 
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDeleteMessage} 
+                className="px-4 py-2 bg-red-500 text-white hover:bg-red-600 rounded"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
