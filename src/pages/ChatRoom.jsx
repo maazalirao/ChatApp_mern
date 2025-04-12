@@ -4105,6 +4105,27 @@ const ChatRoom = () => {
     };
   }, []);
 
+  // Add function to copy message text to clipboard
+  const copyMessageToClipboard = (text) => {
+    // Create a temporary textarea element to copy the text
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+      // Execute the copy command
+      document.execCommand('copy');
+      showToast('Message copied to clipboard');
+    } catch (err) {
+      showToast('Failed to copy message', 'error');
+      console.error('Failed to copy message', err);
+    }
+    
+    // Clean up
+    document.body.removeChild(textarea);
+  };
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
