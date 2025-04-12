@@ -4051,6 +4051,60 @@ const ChatRoom = () => {
     showToast("Message deleted");
   };
 
+  // Add state for highlighted message
+  const [highlightedMessageId, setHighlightedMessageId] = useState(null);
+
+  // Highlight new messages from others
+  useEffect(() => {
+    if (roomMessages.length > 0 && autoScroll) {
+      const latestMessage = roomMessages[roomMessages.length - 1];
+      if (latestMessage && latestMessage.userId !== currentUser.id) {
+        setHighlightedMessageId(latestMessage.id);
+        
+        // Remove highlight after animation completes
+        setTimeout(() => {
+          setHighlightedMessageId(null);
+        }, 2000);
+      }
+    }
+  }, [roomMessages, currentUser.id, autoScroll]);
+
+  // In the message rendering logic, add the highlight class
+  <motion.div
+    className={`message-item relative ${
+      highlightedMessageId === message.id ? 'animate-highlight' : ''
+    }`}
+    // ...other props
+  >
+    {/* message content */}
+  </motion.div>
+
+  // Add the CSS for the highlight animation 
+  useEffect(() => {
+    if (document.getElementById('highlight-animation-styles')) return;
+    
+    const style = document.createElement('style');
+    style.id = 'highlight-animation-styles';
+    style.innerHTML = `
+      @keyframes highlight {
+        0% { background-color: rgba(59, 130, 246, 0.2); }
+        100% { background-color: transparent; }
+      }
+      .animate-highlight {
+        animation: highlight 2s ease-out forwards;
+      }
+    `;
+    
+    document.head.appendChild(style);
+    
+    return () => {
+      const styleElement = document.getElementById('highlight-animation-styles');
+      if (styleElement) {
+        styleElement.remove();
+      }
+    };
+  }, []);
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       <div className="border-b py-2 px-3 flex items-center justify-between shadow-sm">
