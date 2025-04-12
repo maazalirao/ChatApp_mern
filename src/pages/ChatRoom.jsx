@@ -410,54 +410,32 @@ const ChatRoom = () => {
     };
   }, [showMenu, showUsersList]);
   
-  // Enhanced typing indicator renderer
+  // Improved typing indicator animation
   const renderTypingIndicator = () => {
-    const typingUsersInRoom = typingUsers.filter(u => u.roomId === roomId);
-    if (typingUsersInRoom.length === 0) return null;
+    const typingUsersList = Object.keys(typingUsers)
+      .filter(id => id !== currentUser.id && typingUsers[id].roomId === roomId)
+      .map(id => typingUsers[id].username);
+    
+    if (typingUsersList.length === 0) return null;
+    
+    let text = '';
+    if (typingUsersList.length === 1) {
+      text = `${typingUsersList[0]} is typing`;
+    } else if (typingUsersList.length === 2) {
+      text = `${typingUsersList[0]} and ${typingUsersList[1]} are typing`;
+    } else {
+      text = `${typingUsersList.length} people are typing`;
+    }
     
     return (
-      <motion.div
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: 10 }}
-        className="flex items-start space-x-2 p-2 rounded-lg bg-gray-50 dark:bg-gray-800 max-w-xs"
-      >
-        <div className="flex -space-x-2">
-          {typingUsersInRoom.slice(0, 3).map(user => {
-            const userObj = roomInfo?.users?.find(u => u.id === user.id);
-            return (
-              <div key={user.id} className="relative">
-                <img
-                  src={userObj?.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.username)}&background=random`}
-                  alt={user.username}
-                  className="h-6 w-6 rounded-full border-2 border-white dark:border-gray-800"
-                />
-                <div className="absolute -bottom-1 -right-1 h-3 w-3 bg-green-500 rounded-full border border-white dark:border-gray-800 animate-pulse"></div>
-              </div>
-            );
-          })}
+      <div className="flex items-center px-4 py-2 text-sm text-gray-500 dark:text-gray-400 animate-pulse">
+        <div className="mr-2">{text}</div>
+        <div className="flex space-x-1">
+          <div className="h-2 w-2 bg-gray-400 dark:bg-gray-600 rounded-full typing-dot"></div>
+          <div className="h-2 w-2 bg-gray-400 dark:bg-gray-600 rounded-full typing-dot"></div>
+          <div className="h-2 w-2 bg-gray-400 dark:bg-gray-600 rounded-full typing-dot"></div>
         </div>
-        
-        <div className="flex flex-col items-start">
-          <div className="flex space-x-1 items-center">
-            <div className="typing-animation flex space-x-1">
-              <span className="typing-dot"></span>
-              <span className="typing-dot"></span>
-              <span className="typing-dot"></span>
-            </div>
-          </div>
-          
-          <div className="text-xs text-gray-500 dark:text-gray-400 italic">
-            {typingUsersInRoom.length === 1 ? (
-              <span>{typingUsersInRoom[0].username} is typing...</span>
-            ) : typingUsersInRoom.length === 2 ? (
-              <span>{typingUsersInRoom[0].username} and {typingUsersInRoom[1].username} are typing...</span>
-            ) : (
-              <span>Multiple people are typing...</span>
-            )}
-          </div>
-        </div>
-      </motion.div>
+      </div>
     );
   };
   
