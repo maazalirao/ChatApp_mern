@@ -4339,6 +4339,85 @@ const ChatRoom = () => {
     );
   };
 
+  // Add state for message editing
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editText, setEditText] = useState('');
+
+  // Function to start editing a message
+  const startEditingMessage = (message) => {
+    if (message.userId !== currentUser.id) {
+      showToast("You can only edit your own messages", "error");
+      return;
+    }
+    
+    setEditingMessageId(message.id);
+    setEditText(message.text);
+  };
+
+  // Function to save edited message
+  const saveEditedMessage = (messageId) => {
+    if (!editText.trim()) {
+      showToast("Message cannot be empty", "error");
+      return;
+    }
+    
+    // Emit message edit event
+    socket.emit('edit_message', {
+      roomId,
+      messageId,
+      newText: editText.trim()
+    });
+    
+    // Reset edit state
+    setEditingMessageId(null);
+    setEditText('');
+    
+    showToast("Message updated");
+  };
+
+  // Function to cancel message editing
+  const cancelMessageEditing = () => {
+    setEditingMessageId(null);
+    setEditText('');
+  };
+
+  // In the message render function, check if this message is being edited
+  // and show edit input instead of message text
+  {editingMessageId === message.id ? (
+    <div className="flex flex-col w-full">
+      <textarea
+        value={editText}
+        onChange={(e) => setEditText(e.target.value)}
+        className="border border-gray-300 dark:border-gray-600 rounded p-2 mb-2 w-full text-gray-800 dark:text-gray-200 dark:bg-gray-700"
+        autoFocus
+        onKeyDown={(e) => {
+          if (e.key === 'Escape') {
+            cancelMessageEditing();
+          } else if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            saveEditedMessage(message.id);
+          }
+        }}
+      />
+      <div className="flex justify-end space-x-2">
+        <button
+          onClick={cancelMessageEditing}
+          className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 text-sm"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => saveEditedMessage(message.id)}
+          className="text-primary-500 hover:text-primary-600 dark:hover:text-primary-400 font-medium text-sm"
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  ) : (
+    // Regular message content here
+  )}
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Render keyboard shortcuts help modal if active */}
