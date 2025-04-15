@@ -12,6 +12,8 @@ const ChatRoom = () => {
   const [isTyping, setIsTyping] = useState(false);
   const [typingUsers, setTypingUsers] = useState({});
   const [typingTimeout, setTypingTimeout] = useState(null);
+  const [reactions, setReactions] = useState({});
+  const [activeReactionMessage, setActiveReactionMessage] = useState(null);
   const [users, setUsers] = useState([
     { id: 1, username: 'Alice', status: 'online' },
     { id: 2, username: 'Bob', status: 'away' },
@@ -94,6 +96,79 @@ const ChatRoom = () => {
     }, 3000);
     
     setTypingTimeout(timeout);
+  };
+  
+  // Handle adding a reaction to a message
+  const handleAddReaction = (emoji, messageId) => {
+    const currentUserId = 1; // Assuming current user ID
+    
+    // Update reactions state
+    setReactions(prevReactions => {
+      // Get existing reactions for this message
+      const messageReactions = prevReactions[messageId] || [];
+      
+      // Check if user already reacted with this emoji
+      const existingReactionIndex = messageReactions.findIndex(
+        r => r.emoji === emoji && r.userId === currentUserId
+      );
+      
+      let updatedMessageReactions;
+      
+      if (existingReactionIndex >= 0) {
+        // Remove reaction if it already exists
+        updatedMessageReactions = [
+          ...messageReactions.slice(0, existingReactionIndex),
+          ...messageReactions.slice(existingReactionIndex + 1)
+        ];
+      } else {
+        // Add new reaction
+        updatedMessageReactions = [
+          ...messageReactions,
+          { emoji, userId: currentUserId, username: 'You' }
+        ];
+      }
+      
+      return {
+        ...prevReactions,
+        [messageId]: updatedMessageReactions
+      };
+    });
+    
+    setActiveReactionMessage(null);
+  };
+  
+  // Render reactions for a message
+  const renderReactions = (messageId) => {
+    const messageReactions = reactions[messageId] || [];
+    
+    if (messageReactions.length === 0) {
+      return null;
+    }
+    
+    // Group reactions by emoji
+    const groupedReactions = messageReactions.reduce((acc, reaction) => {
+      if (!acc[reaction.emoji]) {
+        acc[reaction.emoji] = [];
+      }
+      acc[reaction.emoji].push(reaction);
+      return acc;
+    }, {});
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {Object.entries(groupedReactions).map(([emoji, users]) => (
+          <button
+            key={emoji}
+            onClick={() => handleAddReaction(emoji, messageId)}
+            className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-2 py-0.5 text-xs flex items-center space-x-1 hover:bg-gray-200 dark:hover:bg-gray-600"
+            title={users.map(u => u.username).join(', ')}
+          >
+            <span>{emoji}</span>
+            <span>{users.length}</span>
+          </button>
+        ))}
+      </div>
+    );
   };
   
   // Simulate other users typing (for demo purposes)
@@ -265,6 +340,34 @@ const ChatRoom = () => {
         </AnimatePresence>
       </div>
       
+      {/* Reaction Emoji Picker */}
+      {activeReactionMessage && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black bg-opacity-30">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg">
+            <h3 className="mb-2 text-center font-medium">Add Reaction</h3>
+            <div className="grid grid-cols-6 gap-2 max-w-xs">
+              {['👍', '👎', '❤️', '😂', '😯', '😢', '😡', '🎉', '🔥', '🙏', '👀', '💯'].map(emoji => (
+                <button
+                  key={emoji}
+                  className="p-2 text-xl hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+                  onClick={() => handleAddReaction(emoji, activeReactionMessage)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button
+                className="px-3 py-1 bg-gray-200 dark:bg-gray-700 rounded-md text-sm"
+                onClick={() => setActiveReactionMessage(null)}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Chat Header */}
       <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center">
@@ -302,13 +405,22 @@ const ChatRoom = () => {
                   variants={bubbleVariants}
                   whileTap="tap"
                   whileHover="hover"
-                  className="mb-4"
+                  className="mb-4 group"
                 >
                   <div className="flex flex-col">
                     <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
-                    <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                      {msg.text}
+                    <div className="flex items-start">
+                      <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
+                        {msg.text}
+                      </div>
+                      <button 
+                        onClick={() => setActiveReactionMessage(msg.id)}
+                        className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                      >
+                        😊
+                      </button>
                     </div>
+                    {renderReactions(msg.id)}
                   </div>
                 </motion.div>
               ))
