@@ -400,6 +400,33 @@ const ChatRoom = () => {
     }
   }, [roomMessages.length]);
   
+  // Format message text with markdown support
+  const formatMessageText = (text) => {
+    if (!text) return null;
+    
+    // Process markdown
+    // 1. Code blocks
+    let formattedText = text.replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-800 text-gray-200 p-2 rounded my-1 overflow-x-auto">$1</pre>');
+    
+    // 2. Inline code
+    formattedText = formattedText.replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$1</code>');
+    
+    // 3. Bold
+    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // 4. Italic
+    formattedText = formattedText.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    // 5. Links
+    formattedText = formattedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
+    
+    // 6. Auto-detect URLs not in markdown format
+    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
+    formattedText = formattedText.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
+    
+    return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -563,7 +590,7 @@ const ChatRoom = () => {
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                          {msg.text}
+                          {formatMessageText(msg.text)}
                         </div>
                         <button 
                           onClick={() => setActiveReactionMessage(msg.id)}
