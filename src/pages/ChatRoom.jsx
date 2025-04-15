@@ -14,6 +14,10 @@ const ChatRoom = () => {
   const [typingTimeout, setTypingTimeout] = useState(null);
   const [reactions, setReactions] = useState({});
   const [activeReactionMessage, setActiveReactionMessage] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentResultIndex, setCurrentResultIndex] = useState(-1);
   const [users, setUsers] = useState([
     { id: 1, username: 'Alice', status: 'online' },
     { id: 2, username: 'Bob', status: 'away' },
@@ -23,6 +27,7 @@ const ChatRoom = () => {
   
   const navigate = useNavigate();
   const { roomId } = useParams();
+  const messageRefs = useRef({});
   
   // Animation variants for messages
   const bubbleVariants = {
@@ -46,6 +51,59 @@ const ChatRoom = () => {
     setTimeout(() => {
       setNotifications(prev => prev.filter(n => n.id !== id));
     }, 3000);
+  };
+  
+  // Search messages
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    
+    const query = searchQuery.toLowerCase();
+    const results = roomMessages.filter(msg => 
+      msg.text.toLowerCase().includes(query)
+    );
+    
+    setSearchResults(results);
+    setCurrentResultIndex(results.length > 0 ? 0 : -1);
+    
+    if (results.length === 0) {
+      showNotification('No messages found', 'info');
+    } else {
+      scrollToMessage(results[0].id);
+      showNotification(`Found ${results.length} messages`, 'success');
+    }
+  };
+  
+  // Navigate between search results
+  const navigateResults = (direction) => {
+    if (searchResults.length === 0) return;
+    
+    let newIndex;
+    if (direction === 'next') {
+      newIndex = (currentResultIndex + 1) % searchResults.length;
+    } else {
+      newIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length;
+    }
+    
+    setCurrentResultIndex(newIndex);
+    scrollToMessage(searchResults[newIndex].id);
+  };
+  
+  // Scroll to a specific message
+  const scrollToMessage = (messageId) => {
+    if (messageRefs.current[messageId]) {
+      messageRefs.current[messageId].scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+      
+      // Highlight message briefly
+      const element = messageRefs.current[messageId];
+      element.classList.add('bg-yellow-100', 'dark:bg-yellow-900');
+      setTimeout(() => {
+        element.classList.remove('bg-yellow-100', 'dark:bg-yellow-900');
+      }, 1500);
+    }
   };
   
   // Apply formatting to message
@@ -320,6 +378,28 @@ const ChatRoom = () => {
     }
   };
   
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setCurrentResultIndex(-1);
+    setShowSearch(false);
+  };
+  
+  // Add some sample messages for testing search
+  useEffect(() => {
+    if (roomMessages.length === 0) {
+      const sampleMessages = [
+        { id: 1, text: "Hello everyone!", timestamp: new Date().toISOString(), userId: 2, username: "Alice" },
+        { id: 2, text: "Hi Alice, how are you doing today?", timestamp: new Date().toISOString(), userId: 3, username: "Bob" },
+        { id: 3, text: "I'm doing great, thanks for asking!", timestamp: new Date().toISOString(), userId: 2, username: "Alice" },
+        { id: 4, text: "Welcome to our chat room", timestamp: new Date().toISOString(), userId: 4, username: "David" },
+        { id: 5, text: "Has anyone seen the latest product update?", timestamp: new Date().toISOString(), userId: 3, username: "Bob" },
+      ];
+      setRoomMessages(sampleMessages);
+    }
+  }, [roomMessages.length]);
+  
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -380,6 +460,14 @@ const ChatRoom = () => {
           <h1 className="text-xl font-semibold">Chat Room</h1>
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            onClick={() => setShowSearch(!showSearch)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
           <button 
             className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
             onClick={() => setShowUsersList(!showUsersList)}
@@ -388,6 +476,63 @@ const ChatRoom = () => {
           </button>
         </div>
       </header>
+      
+      {/* Search Bar */}
+      {showSearch && (
+        <div className="p-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+          <form onSubmit={handleSearch} className="flex items-center">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search messages..."
+              className="flex-1 p-2 rounded-l border border-gray-300 dark:border-gray-600 dark:bg-gray-700"
+            />
+            <button
+              type="submit"
+              className="bg-blue-500 text-white p-2 rounded-r"
+            >
+              Search
+            </button>
+          </form>
+          
+          {searchResults.length > 0 && (
+            <div className="flex items-center justify-between mt-2 text-sm">
+              <div>
+                {`${currentResultIndex + 1} of ${searchResults.length} results`}
+              </div>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={() => navigateResults('prev')}
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                  disabled={searchResults.length <= 1}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => navigateResults('next')}
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                  disabled={searchResults.length <= 1}
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={clearSearch}
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
       <div className="flex flex-1 overflow-hidden">
         {/* Main Chat Area */}
@@ -399,31 +544,39 @@ const ChatRoom = () => {
                 <p>No messages yet. Send the first message!</p>
               </div>
             ) : (
-              roomMessages.map((msg, index) => (
-                <motion.div
-                  key={msg.id || index}
-                  variants={bubbleVariants}
-                  whileTap="tap"
-                  whileHover="hover"
-                  className="mb-4 group"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
-                    <div className="flex items-start">
-                      <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                        {msg.text}
+              roomMessages.map((msg, index) => {
+                const isSearchResult = searchResults.includes(msg);
+                const isCurrentResult = searchResults[currentResultIndex]?.id === msg.id;
+                
+                return (
+                  <motion.div
+                    key={msg.id || index}
+                    variants={bubbleVariants}
+                    whileTap="tap"
+                    whileHover="hover"
+                    className={`mb-4 group transition-colors duration-300 p-1 rounded-lg ${
+                      isCurrentResult ? 'bg-yellow-100 dark:bg-yellow-900' : ''
+                    }`}
+                    ref={el => messageRefs.current[msg.id] = el}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
+                      <div className="flex items-start">
+                        <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
+                          {msg.text}
+                        </div>
+                        <button 
+                          onClick={() => setActiveReactionMessage(msg.id)}
+                          className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                        >
+                          😊
+                        </button>
                       </div>
-                      <button 
-                        onClick={() => setActiveReactionMessage(msg.id)}
-                        className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                      >
-                        😊
-                      </button>
+                      {renderReactions(msg.id)}
                     </div>
-                    {renderReactions(msg.id)}
-                  </div>
-                </motion.div>
-              ))
+                  </motion.div>
+                );
+              })
             )}
           </div>
           
