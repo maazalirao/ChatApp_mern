@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const ChatRoom = () => {
   const [message, setMessage] = useState('');
@@ -8,6 +8,7 @@ const ChatRoom = () => {
   const [darkMode, setDarkMode] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showUsersList, setShowUsersList] = useState(false);
+  const [notifications, setNotifications] = useState([]);
   const [users, setUsers] = useState([
     { id: 1, username: 'Alice', status: 'online' },
     { id: 2, username: 'Bob', status: 'away' },
@@ -22,6 +23,24 @@ const ChatRoom = () => {
   const bubbleVariants = {
     tap: { scale: 0.98 },
     hover: { scale: 1.02 }
+  };
+  
+  // Animation variants for notifications
+  const notificationVariants = {
+    initial: { opacity: 0, y: -50 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -50 }
+  };
+  
+  // Show notification
+  const showNotification = (message, type = 'info') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    
+    // Auto-remove notification after 3 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 3000);
   };
   
   // Apply formatting to message
@@ -76,8 +95,58 @@ const ChatRoom = () => {
     }
   };
   
+  // Get notification color
+  const getNotificationColor = (type) => {
+    switch (type) {
+      case 'success':
+        return 'bg-green-500';
+      case 'error':
+        return 'bg-red-500';
+      case 'warning':
+        return 'bg-yellow-500';
+      default:
+        return 'bg-blue-500';
+    }
+  };
+  
+  // Handle send message
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (message.trim()) {
+      const newMessage = { 
+        id: Date.now(),
+        text: message,
+        timestamp: new Date().toISOString(),
+        userId: 1, // Assuming current user
+        username: 'You'
+      };
+      
+      setRoomMessages([...roomMessages, newMessage]);
+      setMessage('');
+      showNotification('Message sent', 'success');
+    }
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+      {/* Notifications */}
+      <div className="fixed top-4 right-4 z-50 space-y-2">
+        <AnimatePresence>
+          {notifications.map(notification => (
+            <motion.div
+              key={notification.id}
+              variants={notificationVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className={`${getNotificationColor(notification.type)} text-white px-4 py-2 rounded-lg shadow-lg max-w-xs`}
+            >
+              {notification.message}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+      
       {/* Chat Header */}
       <header className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
         <div className="flex items-center">
@@ -104,19 +173,28 @@ const ChatRoom = () => {
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Chat Messages */}
           <div className="flex-1 overflow-y-auto p-4">
-            {roomMessages.map((msg, index) => (
-              <motion.div
-                key={index}
-                variants={bubbleVariants}
-                whileTap="tap"
-                whileHover="hover"
-                className="mb-4"
-              >
-                <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                  {msg.text}
-                </div>
-              </motion.div>
-            ))}
+            {roomMessages.length === 0 ? (
+              <div className="flex items-center justify-center h-full text-gray-500">
+                <p>No messages yet. Send the first message!</p>
+              </div>
+            ) : (
+              roomMessages.map((msg, index) => (
+                <motion.div
+                  key={msg.id || index}
+                  variants={bubbleVariants}
+                  whileTap="tap"
+                  whileHover="hover"
+                  className="mb-4"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
+                    <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
+                      {msg.text}
+                    </div>
+                  </div>
+                </motion.div>
+              ))
+            )}
           </div>
           
           {/* Chat Input */}
@@ -165,13 +243,7 @@ const ChatRoom = () => {
               </div>
             )}
             
-            <form className="flex" onSubmit={(e) => {
-              e.preventDefault();
-              if (message.trim()) {
-                setRoomMessages([...roomMessages, { text: message }]);
-                setMessage('');
-              }
-            }}>
+            <form className="flex" onSubmit={handleSendMessage}>
               <input
                 id="message-input"
                 type="text"
