@@ -9,6 +9,9 @@ const ChatRoom = () => {
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showUsersList, setShowUsersList] = useState(false);
   const [notifications, setNotifications] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [typingTimeout, setTypingTimeout] = useState(null);
   const [users, setUsers] = useState([
     { id: 1, username: 'Alice', status: 'online' },
     { id: 2, username: 'Bob', status: 'away' },
@@ -74,6 +77,121 @@ const ChatRoom = () => {
       input.setSelectionRange(start + 2, end + 2);
     }, 0);
   };
+  
+  // Handle typing indicator
+  const handleTyping = () => {
+    // Simulate sending typing status to server
+    setIsTyping(true);
+    
+    // Clear previous timeout
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    
+    // Set new timeout
+    const timeout = setTimeout(() => {
+      setIsTyping(false);
+    }, 3000);
+    
+    setTypingTimeout(timeout);
+  };
+  
+  // Simulate other users typing (for demo purposes)
+  useEffect(() => {
+    // Randomly have Bob or Alice start typing
+    const randomStartTyping = () => {
+      const randomUser = Math.random() > 0.5 ? 
+        { id: 2, username: 'Bob' } : 
+        { id: 1, username: 'Alice' };
+      
+      setTypingUsers(prev => ({
+        ...prev,
+        [randomUser.id]: randomUser.username
+      }));
+      
+      // Stop typing after random time
+      setTimeout(() => {
+        setTypingUsers(prev => {
+          const newTypingUsers = { ...prev };
+          delete newTypingUsers[randomUser.id];
+          return newTypingUsers;
+        });
+      }, 2000 + Math.random() * 3000);
+    };
+    
+    // Set interval for random typing events
+    const typingInterval = setInterval(() => {
+      if (Math.random() > 0.7) {
+        randomStartTyping();
+      }
+    }, 5000);
+    
+    return () => clearInterval(typingInterval);
+  }, []);
+  
+  // Render typing indicator
+  const renderTypingIndicator = () => {
+    const typingUsersList = Object.keys(typingUsers).map(id => typingUsers[id]);
+    
+    if (typingUsersList.length === 0) {
+      return null;
+    }
+    
+    let typingText = '';
+    if (typingUsersList.length === 1) {
+      typingText = `${typingUsersList[0]} is typing...`;
+    } else if (typingUsersList.length === 2) {
+      typingText = `${typingUsersList[0]} and ${typingUsersList[1]} are typing...`;
+    } else {
+      typingText = 'Several people are typing...';
+    }
+    
+    return (
+      <div className="text-xs text-gray-500 italic p-2 animate-pulse">
+        {typingText}
+        <span className="inline-block">
+          <span className="dots-typing">
+            <span>.</span><span>.</span><span>.</span>
+          </span>
+        </span>
+      </div>
+    );
+  };
+  
+  // Add styles for typing dots animation
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes dotTyping {
+        0% { opacity: 0; }
+        50% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      
+      .dots-typing span {
+        animation: dotTyping 1.5s infinite;
+        display: inline-block;
+        opacity: 0;
+      }
+      
+      .dots-typing span:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .dots-typing span:nth-child(2) {
+        animation-delay: 0.5s;
+      }
+      
+      .dots-typing span:nth-child(3) {
+        animation-delay: 1s;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
 
   // Add emoji to message
   const addEmoji = (emoji) => {
@@ -197,6 +315,9 @@ const ChatRoom = () => {
             )}
           </div>
           
+          {/* Typing Indicator */}
+          {renderTypingIndicator()}
+          
           {/* Chat Input */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
             {/* Formatting toolbar */}
@@ -251,6 +372,7 @@ const ChatRoom = () => {
                 onChange={(e) => {
                   if (e.target.value.length <= 500) {
                     setMessage(e.target.value);
+                    handleTyping();
                   }
                 }}
                 placeholder="Type a message..."
@@ -286,6 +408,9 @@ const ChatRoom = () => {
                     <div className="flex items-center">
                       <div className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(user.status)}`}></div>
                       <span>{user.username}</span>
+                      {typingUsers[user.id] && (
+                        <span className="ml-2 text-xs text-gray-500 italic">typing...</span>
+                      )}
                     </div>
                   </li>
                 ))}
