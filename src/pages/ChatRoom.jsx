@@ -284,7 +284,7 @@ const ChatRoom = () => {
         {typingText}
         <span className="inline-block">
           <span className="dots-typing">
-            <span>.</span><span>.</span><span>.</span>
+            <span></span><span>.</span><span>.</span>
           </span>
         </span>
       </div>
