@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings } from 'react-icons/fi';
+import { FaMicrophone, FaStop } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
+import { FaPaperPlane } from 'react-icons/fa';
 
 const ChatRoom = () => {
   const [message, setMessage] = useState('');
@@ -33,6 +36,11 @@ const ChatRoom = () => {
     secondaryColor: '#10b981', // Default green
     accentColor: '#8b5cf6', // Default purple
   });
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const recordingTimerRef = useRef(null);
   
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -436,11 +444,6 @@ const ChatRoom = () => {
     return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
   
-  // Function to scroll to bottom of messages
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
-
   // Check scroll position to show/hide jump to bottom button
   const handleMessagesScroll = useCallback((e) => {
     const { scrollTop, scrollHeight, clientHeight } = e.target;
@@ -571,6 +574,164 @@ const ChatRoom = () => {
         </div>
       </motion.div>
     );
+  };
+  
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+  
+  // Add scroll position tracking
+  useEffect(() => {
+    const chatContainer = messagesEndRef.current;
+    if (!chatContainer) return;
+    
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      
+      setIsScrolledUp(!isAtBottom);
+      
+      // Reset new messages count when scrolled to bottom
+      if (isAtBottom) {
+        setNewMessagesCount(0);
+      }
+    };
+    
+    chatContainer.addEventListener('scroll', handleScroll);
+    return () => chatContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    if (roomMessages.length && messagesEndRef.current) {
+      if (!isScrolledUp) {
+        scrollToBottom();
+      } else {
+        // Increment new messages count when user is scrolled up
+        setNewMessagesCount(prev => prev + 1);
+      }
+    }
+  }, [roomMessages.length]);
+  
+  // Function to scroll to bottom of chat
+  const scrollToBottom = useCallback(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollTo({
+        top: messagesEndRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+      setNewMessagesCount(0);
+    }
+  }, []);
+  
+  // Render the jump to bottom button
+  const renderJumpToBottomButton = () => {
+    if (!isScrolledUp) return null;
+    
+    return (
+      <button
+        onClick={scrollToBottom}
+        className="absolute bottom-20 right-4 z-20 bg-primary text-white rounded-full shadow-lg p-2 flex items-center"
+        aria-label="Jump to bottom"
+      >
+        <FiChevronDown className="mr-1" />
+        {newMessagesCount > 0 ? (
+          <span className="text-xs font-semibold">
+            {newMessagesCount} new
+          </span>
+        ) : (
+          <span className="text-xs">Bottom</span>
+        )}
+      </button>
+    );
+  };
+  
+  // Handle voice recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      // Start recording
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Setup timer to track recording duration
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      toast.error("Could not access microphone. Please check permissions.");
+    }
+  };
+  
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+  
+  const sendVoiceMessage = async () => {
+    if (!audioBlob) return;
+    
+    try {
+      // Convert blob to base64
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = () => {
+        const base64Audio = reader.result;
+        
+        // Send voice message
+        socket.emit('chatMessage', {
+          room,
+          username,
+          text: '',
+          timestamp: new Date().toISOString(),
+          type: 'audio',
+          audio: base64Audio,
+        });
+        
+        // Reset audio state
+        setAudioBlob(null);
+      };
+    } catch (err) {
+      console.error("Error sending voice message:", err);
+      toast.error("Failed to send voice message");
+    }
+  };
+  
+  const cancelRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+      setAudioBlob(null);
+    }
+  };
+
+  // Format seconds to MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = (seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
   };
   
   return (
@@ -744,6 +905,40 @@ const ChatRoom = () => {
                 const isSearchResult = searchResults.includes(msg);
                 const isCurrentResult = searchResults[currentResultIndex]?.id === msg.id;
                 
+                // Render audio message
+                if (msg.type === 'audio') {
+                  return (
+                    <motion.div
+                      key={msg.id || index}
+                      variants={bubbleVariants}
+                      whileTap="tap"
+                      whileHover="hover"
+                      className={`mb-4 group transition-colors duration-300 p-1 rounded-lg ${
+                        isCurrentResult ? 'bg-yellow-100 dark:bg-yellow-900' : ''
+                      }`}
+                      ref={el => messageRefs.current[msg.id] = el}
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
+                        <div className="flex items-start">
+                          <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
+                            <div className="mt-1">
+                              <audio controls src={msg.audio} className="max-w-full" />
+                            </div>
+                          </div>
+                          <button 
+                            onClick={() => setActiveReactionMessage(msg.id)}
+                            className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                          >
+                            😊
+                          </button>
+                        </div>
+                        {renderReactions(msg.id)}
+                      </div>
+                    </motion.div>
+                  );
+                }
+                
                 return (
                   <motion.div
                     key={msg.id || index}
@@ -776,16 +971,7 @@ const ChatRoom = () => {
             )}
             <div ref={messagesEndRef} />
             
-            {/* Jump to bottom button */}
-            {showScrollButton && (
-              <button
-                onClick={scrollToBottom}
-                className="fixed bottom-20 right-4 bg-blue-500 text-white rounded-full p-2 shadow-lg hover:bg-blue-600 transition-all z-10"
-                aria-label="Jump to bottom"
-              >
-                <FiChevronDown className="text-xl" />
-              </button>
-            )}
+            {renderJumpToBottomButton()}
           </div>
           
           {/* Typing Indicator */}
@@ -837,7 +1023,47 @@ const ChatRoom = () => {
               </div>
             )}
             
-            <form className="flex" onSubmit={handleSendMessage}>
+            {audioBlob ? (
+              <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 rounded-lg p-3 mb-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-blue-500">
+                    <FaMicrophone />
+                  </span>
+                  <span>Voice message ready</span>
+                </div>
+                <div className="flex space-x-2">
+                  <button 
+                    onClick={cancelRecording}
+                    className="text-red-500 hover:text-red-700"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={sendVoiceMessage}
+                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                  >
+                    Send
+                  </button>
+                </div>
+              </div>
+            ) : isRecording ? (
+              <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/30 rounded-lg p-3 mb-2">
+                <div className="flex items-center space-x-2">
+                  <span className="text-red-500 animate-pulse">
+                    <FaMicrophone />
+                  </span>
+                  <span>Recording... {formatTime(recordingTime)}</span>
+                </div>
+                <button 
+                  onClick={stopRecording}
+                  className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
+                >
+                  <FaStop />
+                </button>
+              </div>
+            ) : null}
+            
+            <div className="flex items-center space-x-2">
               <input
                 id="message-input"
                 type="text"
@@ -851,14 +1077,24 @@ const ChatRoom = () => {
                 placeholder="Type a message..."
                 className="flex-1 p-2 border dark:border-gray-600 dark:bg-gray-800 rounded-l"
               />
+              
+              {/* Voice recording button */}
               <button
-                type="submit"
-                disabled={!message.trim()}
-                className={`p-2 rounded-r ${message.trim() ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-300 cursor-not-allowed'} text-white`}
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`p-2 rounded-full ${isRecording ? 'bg-red-500 text-white' : 'text-gray-500 hover:text-blue-500'}`}
+                title={isRecording ? "Stop recording" : "Record voice message"}
               >
-                Send
+                <FaMicrophone />
               </button>
-            </form>
+              
+              <button
+                onClick={handleSendMessage}
+                disabled={(!message.trim() && !audioBlob) || isLoading}
+                className={`bg-blue-500 text-white p-2 rounded-full ${(!message.trim() && !audioBlob) || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
+              >
+                <FaPaperPlane />
+              </button>
+            </div>
           </div>
         </div>
         
