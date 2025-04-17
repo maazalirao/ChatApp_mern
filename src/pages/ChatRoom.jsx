@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -30,6 +30,7 @@ const ChatRoom = () => {
   ]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
   const [showThemeSettings, setShowThemeSettings] = useState(false);
   const [customTheme, setCustomTheme] = useState({
     primaryColor: '#3b82f6', // Default blue
@@ -444,19 +445,36 @@ const ChatRoom = () => {
     return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
   
-  // Check scroll position to show/hide jump to bottom button
-  const handleMessagesScroll = useCallback((e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
-    const bottomThreshold = 100;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < bottomThreshold;
-    setShowScrollButton(!isNearBottom);
-  }, []);
-  
+  // Auto-scroll function that scrolls to the bottom of messages
+  const scrollToBottom = (behavior = 'auto') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Check if should show the jump to bottom button
+  const handleMessagesScroll = () => {
+    if (!messagesContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+    
+    // Only show button when not at bottom and have some scroll distance
+    setShowScrollButton(!isAtBottom && scrollHeight > clientHeight + 200);
+  };
+
+  // Scroll to bottom when new messages arrive if already at bottom
   useEffect(() => {
-    if (!showSearch) {
-      scrollToBottom();
+    if (roomMessages.length > 0) {
+      // Auto-scroll only if user was already at the bottom
+      if (!showScrollButton) {
+        scrollToBottom();
+      }
     }
-  }, [roomMessages, scrollToBottom, showSearch]);
+  }, [roomMessages, showScrollButton]);
+
+  // Scroll to bottom on initial load and room change
+  useEffect(() => {
+    scrollToBottom();
+  }, [roomId]);
   
   // Apply custom theme colors to CSS variables
   useEffect(() => {
@@ -611,39 +629,6 @@ const ChatRoom = () => {
       }
     }
   }, [roomMessages.length]);
-  
-  // Function to scroll to bottom of chat
-  const scrollToBottom = useCallback(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollTo({
-        top: messagesEndRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-      setNewMessagesCount(0);
-    }
-  }, []);
-  
-  // Render the jump to bottom button
-  const renderJumpToBottomButton = () => {
-    if (!isScrolledUp) return null;
-    
-    return (
-      <button
-        onClick={scrollToBottom}
-        className="absolute bottom-20 right-4 z-20 bg-primary text-white rounded-full shadow-lg p-2 flex items-center"
-        aria-label="Jump to bottom"
-      >
-        <FiChevronDown className="mr-1" />
-        {newMessagesCount > 0 ? (
-          <span className="text-xs font-semibold">
-            {newMessagesCount} new
-          </span>
-        ) : (
-          <span className="text-xs">Bottom</span>
-        )}
-      </button>
-    );
-  };
   
   // Handle voice recording
   const startRecording = async () => {
@@ -895,7 +880,7 @@ const ChatRoom = () => {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4" ref={messagesEndRef} onScroll={handleMessagesScroll}>
+          <div className="flex-1 overflow-y-auto p-4" ref={messagesContainerRef} onScroll={handleMessagesScroll}>
             {roomMessages.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <p>No messages yet. Send the first message!</p>
@@ -970,8 +955,6 @@ const ChatRoom = () => {
               })
             )}
             <div ref={messagesEndRef} />
-            
-            {renderJumpToBottomButton()}
           </div>
           
           {/* Typing Indicator */}
@@ -1128,6 +1111,17 @@ const ChatRoom = () => {
           </div>
         )}
       </div>
+      
+      {/* Jump to bottom button */}
+      {showScrollButton && (
+        <button
+          onClick={() => scrollToBottom('smooth')}
+          className="absolute right-8 bottom-20 bg-blue-500 hover:bg-blue-600 text-white rounded-full p-2 shadow-lg z-10 transition-all"
+          aria-label="Scroll to bottom"
+        >
+          <FiArrowDown size={20} />
+        </button>
+      )}
     </div>
   );
 };
