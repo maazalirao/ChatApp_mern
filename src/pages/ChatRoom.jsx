@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
+import { useSelector } from "react-redux";
 
-const ChatRoom = () => {
+const ChatRoom = ({ socket }) => {
   const [message, setMessage] = useState('');
   const [roomMessages, setRoomMessages] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
@@ -42,6 +43,9 @@ const ChatRoom = () => {
   const [recordingTime, setRecordingTime] = useState(0);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const recordingTimerRef = useRef(null);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const fileInputRef = useRef(null);
   
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -719,6 +723,229 @@ const ChatRoom = () => {
     return `${mins}:${secs}`;
   };
   
+  // Handle file selection
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    if (files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...files]);
+      setShowFileUpload(true);
+    }
+  };
+
+  // Handle drag and drop events
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length > 0) {
+      setSelectedFiles(prev => [...prev, ...files]);
+      setShowFileUpload(true);
+    }
+  };
+
+  // Remove a selected file
+  const removeSelectedFile = (index) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    if (selectedFiles.length <= 1) {
+      setShowFileUpload(false);
+    }
+  };
+
+  // Get file icon based on type
+  const getFileIcon = (file) => {
+    const type = file.type.split('/')[0];
+    switch (type) {
+      case 'image':
+        return <FiImage size={20} />;
+      case 'video':
+        return <FiVideo size={20} />;
+      case 'audio':
+        return <FiMusic size={20} />;
+      default:
+        return <FiFile size={20} />;
+    }
+  };
+
+  // Get file size in readable format
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Send message with files
+  const sendMessageWithFiles = async () => {
+    if (selectedFiles.length === 0 && message.trim() === '') return;
+    
+    const messagesToSend = [];
+    
+    // Handle text message if present
+    if (message.trim() !== '') {
+      messagesToSend.push({
+        type: 'text',
+        content: message
+      });
+    }
+    
+    // Handle file uploads
+    for (const file of selectedFiles) {
+      // Create a FormData object to send the file
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      try {
+        // Example: Send to a file upload endpoint
+        // In a real app, you would use fetch or axios to send to your server
+        // const response = await fetch('/api/upload', {
+        //   method: 'POST',
+        //   body: formData
+        // });
+        // const result = await response.json();
+        
+        // For demo, we'll simulate a successful upload with a fake URL
+        const fileUrl = URL.createObjectURL(file);
+        
+        messagesToSend.push({
+          type: file.type.startsWith('image/') ? 'image' : 'file',
+          content: fileUrl,
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type
+        });
+      } catch (error) {
+        console.error('Error uploading file:', error);
+        // Handle upload error
+      }
+    }
+    
+    // Send each message
+    for (const msgData of messagesToSend) {
+      socket.emit("send_message", {
+        room: room,
+        content: msgData.content,
+        type: msgData.type,
+        sender: currentUser,
+        time: new Date(),
+        ...(msgData.fileName && { fileName: msgData.fileName }),
+        ...(msgData.fileSize && { fileSize: msgData.fileSize }),
+        ...(msgData.fileType && { fileType: msgData.fileType })
+      });
+    }
+    
+    // Reset state
+    setMessage("");
+    setSelectedFiles([]);
+    setShowFileUpload(false);
+  };
+
+  // Render file upload area
+  const renderFileUploadArea = () => {
+    if (!showFileUpload) return null;
+    
+    return (
+      <div className="file-upload-area p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-2">
+        <div className="flex justify-between items-center mb-2">
+          <h3 className="text-sm font-medium">Selected Files ({selectedFiles.length})</h3>
+          <button 
+            onClick={() => {
+              setSelectedFiles([]);
+              setShowFileUpload(false);
+            }}
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          >
+            <FiX size={18} />
+          </button>
+        </div>
+        
+        <div className="selected-files-list max-h-40 overflow-y-auto">
+          {selectedFiles.map((file, index) => (
+            <div key={index} className="selected-file flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded mb-2">
+              <div className="flex items-center space-x-2">
+                {file.type.startsWith('image/') ? (
+                  <div className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden">
+                    <img 
+                      src={URL.createObjectURL(file)} 
+                      alt={file.name} 
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                ) : (
+                  <div className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400">
+                    {getFileIcon(file)}
+                  </div>
+                )}
+                <div className="file-info">
+                  <p className="text-sm font-medium truncate max-w-[150px]">{file.name}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => removeSelectedFile(index)}
+                className="text-red-500 hover:text-red-700"
+              >
+                <FiX size={16} />
+              </button>
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex justify-end mt-2">
+          <button 
+            onClick={sendMessageWithFiles}
+            className="px-4 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
+          >
+            Send
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // Render file message
+  const renderFileMessage = (msg) => {
+    if (msg.type === 'image') {
+      return (
+        <div className="image-message mb-1">
+          <img 
+            src={msg.content} 
+            alt={msg.fileName || 'Image'} 
+            className="max-w-[300px] max-h-[300px] rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+            onClick={() => window.open(msg.content, '_blank')}
+          />
+        </div>
+      );
+    } else if (msg.type === 'file') {
+      return (
+        <div className="file-message p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mb-1 flex items-center space-x-2">
+          <div className="file-icon text-gray-500 dark:text-gray-400">
+            <FiFile size={20} />
+          </div>
+          <div className="file-info flex-1">
+            <p className="text-sm font-medium">{msg.fileName}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(msg.fileSize)}</p>
+          </div>
+          <a 
+            href={msg.content} 
+            download={msg.fileName}
+            className="download-button text-blue-500 hover:text-blue-700"
+          >
+            <FiDownload size={18} />
+          </a>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -939,7 +1166,7 @@ const ChatRoom = () => {
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                          {formatMessageText(msg.text)}
+                          {msg.type === 'text' ? formatMessageText(msg.text) : msg.type === 'image' || msg.type === 'file' ? renderFileMessage(msg) : null}
                         </div>
                         <button 
                           onClick={() => setActiveReactionMessage(msg.id)}
@@ -1047,6 +1274,21 @@ const ChatRoom = () => {
             ) : null}
             
             <div className="flex items-center space-x-2">
+              <button 
+                onClick={() => fileInputRef.current.click()}
+                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                title="Attach files"
+              >
+                <FiPaperclip size={20} />
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputRef}
+                onChange={handleFileSelect}
+                className="hidden"
+                multiple
+              />
+              
               <input
                 id="message-input"
                 type="text"
@@ -1071,9 +1313,9 @@ const ChatRoom = () => {
               </button>
               
               <button
-                onClick={handleSendMessage}
-                disabled={(!message.trim() && !audioBlob) || isLoading}
-                className={`bg-blue-500 text-white p-2 rounded-full ${(!message.trim() && !audioBlob) || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
+                onClick={showFileUpload ? sendMessageWithFiles : handleSendMessage}
+                disabled={(!showFileUpload && message.trim() === '') || isLoading}
+                className={`bg-blue-500 text-white p-2 rounded-full ${(!showFileUpload && message.trim() === '') || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
               >
                 <FaPaperPlane />
               </button>
@@ -1122,6 +1364,9 @@ const ChatRoom = () => {
           <FiArrowDown size={20} />
         </button>
       )}
+      
+      {/* File upload area */}
+      {renderFileUploadArea()}
     </div>
   );
 };
