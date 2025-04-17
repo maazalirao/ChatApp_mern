@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings } from 'react-icons/fi';
 
 const ChatRoom = () => {
   const [message, setMessage] = useState('');
@@ -27,6 +27,12 @@ const ChatRoom = () => {
   ]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef(null);
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
+  const [customTheme, setCustomTheme] = useState({
+    primaryColor: '#3b82f6', // Default blue
+    secondaryColor: '#10b981', // Default green
+    accentColor: '#8b5cf6', // Default purple
+  });
   
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -449,6 +455,124 @@ const ChatRoom = () => {
     }
   }, [roomMessages, scrollToBottom, showSearch]);
   
+  // Apply custom theme colors to CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--primary-color', customTheme.primaryColor);
+    document.documentElement.style.setProperty('--secondary-color', customTheme.secondaryColor);
+    document.documentElement.style.setProperty('--accent-color', customTheme.accentColor);
+  }, [customTheme]);
+
+  const handleThemeChange = (property, value) => {
+    setCustomTheme(prev => ({
+      ...prev,
+      [property]: value
+    }));
+  };
+
+  const renderThemeSettings = () => {
+    if (!showThemeSettings) return null;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="absolute right-0 top-16 z-50 w-72 rounded-lg bg-white dark:bg-gray-800 p-4 shadow-lg"
+      >
+        <h3 className="font-semibold mb-3 text-gray-700 dark:text-gray-200">Customize Theme</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Primary Color
+            </label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={customTheme.primaryColor}
+                onChange={(e) => handleThemeChange('primaryColor', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customTheme.primaryColor}
+                onChange={(e) => handleThemeChange('primaryColor', e.target.value)}
+                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
+              />
+              <button
+                onClick={() => handleThemeChange('primaryColor', '#3b82f6')}
+                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Secondary Color
+            </label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={customTheme.secondaryColor}
+                onChange={(e) => handleThemeChange('secondaryColor', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customTheme.secondaryColor}
+                onChange={(e) => handleThemeChange('secondaryColor', e.target.value)}
+                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
+              />
+              <button
+                onClick={() => handleThemeChange('secondaryColor', '#10b981')}
+                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Accent Color
+            </label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={customTheme.accentColor}
+                onChange={(e) => handleThemeChange('accentColor', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customTheme.accentColor}
+                onChange={(e) => handleThemeChange('accentColor', e.target.value)}
+                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
+              />
+              <button
+                onClick={() => handleThemeChange('accentColor', '#8b5cf6')}
+                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => setShowThemeSettings(false)}
+            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+          >
+            Close
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -538,6 +662,14 @@ const ChatRoom = () => {
           >
             Users ({users.filter(u => u.status === 'online').length})
           </button>
+          <button
+            onClick={() => setShowThemeSettings(!showThemeSettings)}
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 relative"
+            title="Theme Settings"
+          >
+            <FiSettings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
+          </button>
+          {renderThemeSettings()}
         </div>
       </header>
       
