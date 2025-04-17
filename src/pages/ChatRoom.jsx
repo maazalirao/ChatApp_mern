@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -46,6 +46,14 @@ const ChatRoom = ({ socket }) => {
   const [showFileUpload, setShowFileUpload] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState([]);
   const fileInputRef = useRef(null);
+  const [notificationSettings, setNotificationSettings] = useState({
+    soundEnabled: true,
+    desktopEnabled: false,
+    mentionsOnly: false
+  });
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasPermission, setHasPermission] = useState(false);
+  const notificationAudio = useMemo(() => new Audio('/notification.mp3'), []);
   
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -946,6 +954,122 @@ const ChatRoom = ({ socket }) => {
     return null;
   };
 
+  // Handle notification permission
+  useEffect(() => {
+    if (notificationSettings.desktopEnabled && Notification.permission !== 'granted') {
+      Notification.requestPermission().then(permission => {
+        setHasPermission(permission === 'granted');
+      });
+    } else if (Notification.permission === 'granted') {
+      setHasPermission(true);
+    }
+  }, [notificationSettings.desktopEnabled]);
+  
+  // Handle notifications for new messages
+  useEffect(() => {
+    if (!roomMessages.length || !currentRoom) return;
+    
+    // Get last message
+    const lastMsg = roomMessages[roomMessages.length - 1];
+    
+    // Skip if it's the user's own message
+    if (lastMsg.sender === user.username) return;
+    
+    // If tab is not focused, increment unread count
+    if (!document.hasFocus()) {
+      setUnreadCount(prev => prev + 1);
+      
+      // Play sound if enabled
+      if (notificationSettings.soundEnabled) {
+        notificationAudio.play().catch(err => console.error('Error playing notification:', err));
+      }
+      
+      // Show desktop notification if enabled
+      if (notificationSettings.desktopEnabled && hasPermission) {
+        // Skip if mentions only is enabled and the message doesn't mention the user
+        if (notificationSettings.mentionsOnly && 
+            !lastMsg.text.includes(`@${user.username}`)) {
+          return;
+        }
+        
+        const notification = new Notification(`${lastMsg.sender} in ${currentRoom.name}`, {
+          body: lastMsg.text.substring(0, 60) + (lastMsg.text.length > 60 ? '...' : ''),
+          icon: '/logo.png'
+        });
+        
+        notification.onclick = () => {
+          window.focus();
+          notification.close();
+        };
+      }
+    }
+  }, [roomMessages, currentRoom, user.username, notificationSettings, hasPermission, notificationAudio]);
+  
+  // Reset unread count when tab gets focus
+  useEffect(() => {
+    const handleFocus = () => setUnreadCount(0);
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+  
+  // Update document title with unread count
+  useEffect(() => {
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) Chat App`;
+    } else {
+      document.title = 'Chat App';
+    }
+  }, [unreadCount]);
+  
+  const renderNotificationControls = () => (
+    <div className="flex items-center space-x-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md mt-2">
+      <h3 className="text-sm font-medium mb-1">Notification Settings</h3>
+      <div className="flex flex-wrap gap-2">
+        <button 
+          onClick={() => setNotificationSettings(prev => ({
+            ...prev, 
+            soundEnabled: !prev.soundEnabled
+          }))}
+          className="flex items-center text-sm px-2 py-1 rounded bg-white dark:bg-gray-700 shadow-sm"
+        >
+          {notificationSettings.soundEnabled ? (
+            <><FiVolume className="mr-1" /> Sound On</>
+          ) : (
+            <><FiVolumeX className="mr-1" /> Sound Off</>
+          )}
+        </button>
+        
+        <button 
+          onClick={() => setNotificationSettings(prev => ({
+            ...prev, 
+            desktopEnabled: !prev.desktopEnabled
+          }))}
+          className="flex items-center text-sm px-2 py-1 rounded bg-white dark:bg-gray-700 shadow-sm"
+        >
+          {notificationSettings.desktopEnabled ? (
+            <><FiBell className="mr-1" /> Desktop On</>
+          ) : (
+            <><FiBellOff className="mr-1" /> Desktop Off</>
+          )}
+        </button>
+        
+        {notificationSettings.desktopEnabled && (
+          <button 
+            onClick={() => setNotificationSettings(prev => ({
+              ...prev, 
+              mentionsOnly: !prev.mentionsOnly
+            }))}
+            className={`flex items-center text-sm px-2 py-1 rounded bg-white dark:bg-gray-700 shadow-sm ${
+              notificationSettings.mentionsOnly ? 'text-blue-600 dark:text-blue-400' : ''
+            }`}
+          >
+            @Mentions Only
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -1350,6 +1474,7 @@ const ChatRoom = ({ socket }) => {
                 ))}
               </ul>
             </div>
+            {renderNotificationControls()}
           </div>
         )}
       </div>
