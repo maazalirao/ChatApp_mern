@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
 import { useSelector } from "react-redux";
 
-const ChatRoom = ({ socket }) => {
+const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [message, setMessage] = useState('');
   const [roomMessages, setRoomMessages] = useState([]);
   const [darkMode, setDarkMode] = useState(true);
@@ -54,8 +54,10 @@ const ChatRoom = ({ socket }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [hasPermission, setHasPermission] = useState(false);
   const notificationAudio = useMemo(() => new Audio('/notification.mp3'), []);
+  const [attachments, setAttachments] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({});
   
-  const navigate = useNavigate();
   const { roomId } = useParams();
   const messageRefs = useRef({});
   
@@ -732,226 +734,207 @@ const ChatRoom = ({ socket }) => {
   };
   
   // Handle file selection
-  const handleFileSelect = (e) => {
-    const files = Array.from(e.target.files);
-    if (files.length > 0) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setShowFileUpload(true);
-    }
+  const handleFileSelect = (event) => {
+    const files = Array.from(event.target.files);
+    handleFiles(files);
   };
 
-  // Handle drag and drop events
+  const handleFiles = (files) => {
+    const newAttachments = files.map(file => ({
+      id: Date.now() + Math.random().toString(36).substr(2, 9),
+      file,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : null,
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      uploading: false,
+      progress: 0
+    }));
+    
+    setAttachments(prev => [...prev, ...newAttachments]);
+  };
+
   const handleDragOver = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
   };
 
   const handleDrop = (e) => {
     e.preventDefault();
     e.stopPropagation();
+    setIsDragging(false);
     
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 0) {
-      setSelectedFiles(prev => [...prev, ...files]);
-      setShowFileUpload(true);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      const files = Array.from(e.dataTransfer.files);
+      handleFiles(files);
     }
   };
 
-  // Remove a selected file
-  const removeSelectedFile = (index) => {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    if (selectedFiles.length <= 1) {
-      setShowFileUpload(false);
-    }
+  const removeAttachment = (id) => {
+    setAttachments(prev => prev.filter(attachment => attachment.id !== id));
   };
 
-  // Get file icon based on type
-  const getFileIcon = (file) => {
-    const type = file.type.split('/')[0];
-    switch (type) {
-      case 'image':
-        return <FiImage size={20} />;
-      case 'video':
-        return <FiVideo size={20} />;
-      case 'audio':
-        return <FiMusic size={20} />;
-      default:
-        return <FiFile size={20} />;
-    }
-  };
+  const uploadAttachment = async (attachment) => {
+    // In a real app, you'd upload to a server
+    // This is a simulation of file upload
+    setAttachments(prev => prev.map(a => 
+      a.id === attachment.id ? {...a, uploading: true} : a
+    ));
 
-  // Get file size in readable format
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-  };
-
-  // Send message with files
-  const sendMessageWithFiles = async () => {
-    if (selectedFiles.length === 0 && message.trim() === '') return;
-    
-    const messagesToSend = [];
-    
-    // Handle text message if present
-    if (message.trim() !== '') {
-      messagesToSend.push({
-        type: 'text',
-        content: message
+    // Simulate upload progress
+    const interval = setInterval(() => {
+      setUploadProgress(prev => {
+        const newProgress = (prev[attachment.id] || 0) + 10;
+        if (newProgress >= 100) {
+          clearInterval(interval);
+        }
+        return {...prev, [attachment.id]: newProgress};
       });
-    }
+    }, 300);
+
+    // For demo purposes, wait for "upload" to complete
+    await new Promise(resolve => setTimeout(resolve, 3000));
     
-    // Handle file uploads
-    for (const file of selectedFiles) {
-      // Create a FormData object to send the file
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      try {
-        // Example: Send to a file upload endpoint
-        // In a real app, you would use fetch or axios to send to your server
-        // const response = await fetch('/api/upload', {
-        //   method: 'POST',
-        //   body: formData
-        // });
-        // const result = await response.json();
-        
-        // For demo, we'll simulate a successful upload with a fake URL
-        const fileUrl = URL.createObjectURL(file);
-        
-        messagesToSend.push({
-          type: file.type.startsWith('image/') ? 'image' : 'file',
-          content: fileUrl,
-          fileName: file.name,
-          fileSize: file.size,
-          fileType: file.type
-        });
-      } catch (error) {
-        console.error('Error uploading file:', error);
-        // Handle upload error
+    // Create a message with the attachment
+    const msgData = {
+      room,
+      author: username,
+      message: "",
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      date: new Date().toLocaleDateString(),
+      attachment: {
+        name: attachment.name,
+        type: attachment.type,
+        size: attachment.size,
+        url: attachment.preview || "#", // In a real app, this would be the server URL
+        isImage: attachment.type.startsWith('image/')
       }
-    }
+    };
     
-    // Send each message
-    for (const msgData of messagesToSend) {
-      socket.emit("send_message", {
-        room: room,
-        content: msgData.content,
-        type: msgData.type,
-        sender: currentUser,
-        time: new Date(),
-        ...(msgData.fileName && { fileName: msgData.fileName }),
-        ...(msgData.fileSize && { fileSize: msgData.fileSize }),
-        ...(msgData.fileType && { fileType: msgData.fileType })
-      });
-    }
+    // Send to the server
+    socket.emit("send_message", msgData);
     
-    // Reset state
-    setMessage("");
-    setSelectedFiles([]);
-    setShowFileUpload(false);
+    // Remove from attachments list after sending
+    setAttachments(prev => prev.filter(a => a.id !== attachment.id));
+    setUploadProgress(prev => {
+      const { [attachment.id]: _, ...rest } = prev;
+      return rest;
+    });
   };
 
-  // Render file upload area
-  const renderFileUploadArea = () => {
-    if (!showFileUpload) return null;
+  const renderAttachmentPreviews = () => {
+    if (attachments.length === 0) return null;
     
     return (
-      <div className="file-upload-area p-3 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg mb-2">
-        <div className="flex justify-between items-center mb-2">
-          <h3 className="text-sm font-medium">Selected Files ({selectedFiles.length})</h3>
-          <button 
-            onClick={() => {
-              setSelectedFiles([]);
-              setShowFileUpload(false);
-            }}
-            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-          >
-            <FiX size={18} />
-          </button>
-        </div>
-        
-        <div className="selected-files-list max-h-40 overflow-y-auto">
-          {selectedFiles.map((file, index) => (
-            <div key={index} className="selected-file flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-700 rounded mb-2">
-              <div className="flex items-center space-x-2">
-                {file.type.startsWith('image/') ? (
-                  <div className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-600 overflow-hidden">
-                    <img 
-                      src={URL.createObjectURL(file)} 
-                      alt={file.name} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                ) : (
-                  <div className="w-10 h-10 rounded bg-gray-200 dark:bg-gray-600 flex items-center justify-center text-gray-500 dark:text-gray-400">
-                    {getFileIcon(file)}
+      <div className="flex flex-wrap gap-2 p-2 border-t border-gray-200 dark:border-gray-700">
+        {attachments.map(attachment => (
+          <div key={attachment.id} className="relative group">
+            {attachment.type.startsWith('image/') ? (
+              <div className="relative w-24 h-24 rounded overflow-hidden">
+                <img 
+                  src={attachment.preview} 
+                  alt={attachment.name} 
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button 
+                    onClick={() => uploadAttachment(attachment)}
+                    className="p-1 bg-green-500 rounded-full text-white mx-1"
+                  >
+                    <FiDownload size={14} />
+                  </button>
+                  <button 
+                    onClick={() => removeAttachment(attachment.id)}
+                    className="p-1 bg-red-500 rounded-full text-white mx-1"
+                  >
+                    <FiX size={14} />
+                  </button>
+                </div>
+                {uploadProgress[attachment.id] > 0 && uploadProgress[attachment.id] < 100 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ width: `${uploadProgress[attachment.id]}%` }}
+                    ></div>
                   </div>
                 )}
-                <div className="file-info">
-                  <p className="text-sm font-medium truncate max-w-[150px]">{file.name}</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(file.size)}</p>
-                </div>
               </div>
-              <button 
-                onClick={() => removeSelectedFile(index)}
-                className="text-red-500 hover:text-red-700"
-              >
-                <FiX size={16} />
-              </button>
-            </div>
-          ))}
-        </div>
-        
-        <div className="flex justify-end mt-2">
-          <button 
-            onClick={sendMessageWithFiles}
-            className="px-4 py-1 bg-blue-500 text-white rounded-md hover:bg-blue-600 text-sm"
-          >
-            Send
-          </button>
-        </div>
+            ) : (
+              <div className="relative w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded flex flex-col items-center justify-center p-2">
+                <FiFile size={20} className="text-gray-500 mb-1" />
+                <div className="text-xs text-center truncate w-full">
+                  {attachment.name}
+                </div>
+                <button 
+                  onClick={() => uploadAttachment(attachment)}
+                  className="absolute top-1 right-1 p-1 bg-green-500 rounded-full text-white"
+                  style={{ fontSize: '8px' }}
+                >
+                  <FiDownload size={10} />
+                </button>
+                <button 
+                  onClick={() => removeAttachment(attachment.id)}
+                  className="absolute top-1 left-1 p-1 bg-red-500 rounded-full text-white"
+                  style={{ fontSize: '8px' }}
+                >
+                  <FiX size={10} />
+                </button>
+                {uploadProgress[attachment.id] > 0 && uploadProgress[attachment.id] < 100 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ width: `${uploadProgress[attachment.id]}%` }}
+                    ></div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
     );
   };
 
-  // Render file message
-  const renderFileMessage = (msg) => {
-    if (msg.type === 'image') {
-      return (
-        <div className="image-message mb-1">
-          <img 
-            src={msg.content} 
-            alt={msg.fileName || 'Image'} 
-            className="max-w-[300px] max-h-[300px] rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={() => window.open(msg.content, '_blank')}
-          />
-        </div>
-      );
-    } else if (msg.type === 'file') {
-      return (
-        <div className="file-message p-2 bg-gray-100 dark:bg-gray-700 rounded-lg mb-1 flex items-center space-x-2">
-          <div className="file-icon text-gray-500 dark:text-gray-400">
-            <FiFile size={20} />
-          </div>
-          <div className="file-info flex-1">
-            <p className="text-sm font-medium">{msg.fileName}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{formatFileSize(msg.fileSize)}</p>
-          </div>
-          <a 
-            href={msg.content} 
-            download={msg.fileName}
-            className="download-button text-blue-500 hover:text-blue-700"
-          >
-            <FiDownload size={18} />
-          </a>
-        </div>
-      );
-    }
+  const renderAttachmentInMessage = (message) => {
+    if (!message.attachment) return null;
     
-    return null;
+    return (
+      <div className="mt-2 max-w-xs">
+        {message.attachment.isImage ? (
+          <div className="rounded-lg overflow-hidden">
+            <img 
+              src={message.attachment.url} 
+              alt={message.attachment.name}
+              className="max-w-full max-h-60 object-contain"
+            />
+          </div>
+        ) : (
+          <div className="flex items-center p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
+            <FiFile className="mr-2 text-blue-500" />
+            <div className="flex-1 overflow-hidden">
+              <div className="truncate text-sm">{message.attachment.name}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {(message.attachment.size / 1024).toFixed(2)} KB
+              </div>
+            </div>
+            <a 
+              href={message.attachment.url}
+              download={message.attachment.name}
+              className="p-1 bg-blue-500 rounded text-white ml-2"
+            >
+              <FiDownload size={16} />
+            </a>
+          </div>
+        )}
+      </div>
+    );
   };
 
   // Handle notification permission
@@ -967,13 +950,13 @@ const ChatRoom = ({ socket }) => {
   
   // Handle notifications for new messages
   useEffect(() => {
-    if (!roomMessages.length || !currentRoom) return;
+    if (!roomMessages.length || !room) return;
     
     // Get last message
     const lastMsg = roomMessages[roomMessages.length - 1];
     
     // Skip if it's the user's own message
-    if (lastMsg.sender === user.username) return;
+    if (lastMsg.sender === username) return;
     
     // If tab is not focused, increment unread count
     if (!document.hasFocus()) {
@@ -988,11 +971,11 @@ const ChatRoom = ({ socket }) => {
       if (notificationSettings.desktopEnabled && hasPermission) {
         // Skip if mentions only is enabled and the message doesn't mention the user
         if (notificationSettings.mentionsOnly && 
-            !lastMsg.text.includes(`@${user.username}`)) {
+            !lastMsg.text.includes(`@${username}`)) {
           return;
         }
         
-        const notification = new Notification(`${lastMsg.sender} in ${currentRoom.name}`, {
+        const notification = new Notification(`${lastMsg.sender} in ${room.name}`, {
           body: lastMsg.text.substring(0, 60) + (lastMsg.text.length > 60 ? '...' : ''),
           icon: '/logo.png'
         });
@@ -1003,7 +986,7 @@ const ChatRoom = ({ socket }) => {
         };
       }
     }
-  }, [roomMessages, currentRoom, user.username, notificationSettings, hasPermission, notificationAudio]);
+  }, [roomMessages, room, username, notificationSettings, hasPermission, notificationAudio]);
   
   // Reset unread count when tab gets focus
   useEffect(() => {
@@ -1290,7 +1273,7 @@ const ChatRoom = ({ socket }) => {
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                          {msg.type === 'text' ? formatMessageText(msg.text) : msg.type === 'image' || msg.type === 'file' ? renderFileMessage(msg) : null}
+                          {msg.type === 'text' ? formatMessageText(msg.text) : msg.type === 'image' || msg.type === 'file' ? renderAttachmentInMessage(msg) : null}
                         </div>
                         <button 
                           onClick={() => setActiveReactionMessage(msg.id)}
@@ -1313,104 +1296,20 @@ const ChatRoom = ({ socket }) => {
           
           {/* Chat Input */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            {/* Formatting toolbar */}
-            <div className="mb-2 flex items-center space-x-2">
+            {renderAttachmentPreviews()}
+            <div className={`relative flex items-center ${isDragging ? 'border-2 border-dashed border-blue-400 p-2 rounded' : ''}`}>
               <button 
-                onClick={() => applyFormatting('bold')} 
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+                onClick={() => fileInputRef.current.click()} 
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
               >
-                <span className="font-bold">B</span>
-              </button>
-              <button 
-                onClick={() => applyFormatting('italic')} 
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                <span className="italic">I</span>
-              </button>
-              <button 
-                onClick={() => setShowEmojiPicker(!showEmojiPicker)} 
-                className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-              >
-                😊
-              </button>
-              <div className="flex-1"></div>
-              <span className={`text-xs ${message.length > 450 ? 'text-orange-500' : ''} ${message.length > 490 ? 'text-red-500' : ''}`}>
-                {message.length}/500
-              </span>
-            </div>
-            
-            {/* Emoji picker */}
-            {showEmojiPicker && (
-              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded mb-2 p-2">
-                <div className="grid grid-cols-8 gap-1">
-                  {['😀', '😂', '😍', '🥰', '😎', '😇', '🤔', '😴', 
-                    '👍', '👏', '🙌', '🎉', '❤️', '🔥', '⭐', '💯'].map(emoji => (
-                    <button
-                      key={emoji}
-                      onClick={() => addEmoji(emoji)}
-                      className="hover:bg-gray-100 dark:hover:bg-gray-700 p-1 rounded"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            
-            {audioBlob ? (
-              <div className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 rounded-lg p-3 mb-2">
-                <div className="flex items-center space-x-2">
-                  <span className="text-blue-500">
-                    <FaMicrophone />
-                  </span>
-                  <span>Voice message ready</span>
-                </div>
-                <div className="flex space-x-2">
-                  <button 
-                    onClick={cancelRecording}
-                    className="text-red-500 hover:text-red-700"
-                  >
-                    Cancel
-                  </button>
-                  <button 
-                    onClick={sendVoiceMessage}
-                    className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-                  >
-                    Send
-                  </button>
-                </div>
-              </div>
-            ) : isRecording ? (
-              <div className="flex items-center justify-between bg-red-50 dark:bg-red-900/30 rounded-lg p-3 mb-2">
-                <div className="flex items-center space-x-2">
-                  <span className="text-red-500 animate-pulse">
-                    <FaMicrophone />
-                  </span>
-                  <span>Recording... {formatTime(recordingTime)}</span>
-                </div>
-                <button 
-                  onClick={stopRecording}
-                  className="bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
-                >
-                  <FaStop />
-                </button>
-              </div>
-            ) : null}
-            
-            <div className="flex items-center space-x-2">
-              <button 
-                onClick={() => fileInputRef.current.click()}
-                className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                title="Attach files"
-              >
-                <FiPaperclip size={20} />
+                <FiPaperclip />
               </button>
               <input 
                 type="file" 
-                ref={fileInputRef}
-                onChange={handleFileSelect}
-                className="hidden"
+                ref={fileInputRef} 
                 multiple
+                onChange={handleFileSelect} 
+                className="hidden" 
               />
               
               <input
@@ -1444,6 +1343,13 @@ const ChatRoom = ({ socket }) => {
                 <FaPaperPlane />
               </button>
             </div>
+            {isDragging && (
+              <div className="absolute inset-0 bg-blue-100 bg-opacity-50 z-10 flex items-center justify-center">
+                <div className="p-4 bg-white rounded-lg shadow-lg">
+                  <p className="text-lg font-semibold">Drop files to upload</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
         
@@ -1489,9 +1395,6 @@ const ChatRoom = ({ socket }) => {
           <FiArrowDown size={20} />
         </button>
       )}
-      
-      {/* File upload area */}
-      {renderFileUploadArea()}
     </div>
   );
 };
