@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 
 const ChatRoom = () => {
   const [message, setMessage] = useState('');
@@ -24,6 +25,8 @@ const ChatRoom = () => {
     { id: 3, username: 'Charlie', status: 'offline' },
     { id: 4, username: 'David', status: 'online' },
   ]);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const messagesEndRef = useRef(null);
   
   const navigate = useNavigate();
   const { roomId } = useParams();
@@ -427,6 +430,25 @@ const ChatRoom = () => {
     return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
   
+  // Function to scroll to bottom of messages
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  // Check scroll position to show/hide jump to bottom button
+  const handleMessagesScroll = useCallback((e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    const bottomThreshold = 100;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < bottomThreshold;
+    setShowScrollButton(!isNearBottom);
+  }, []);
+  
+  useEffect(() => {
+    if (!showSearch) {
+      scrollToBottom();
+    }
+  }, [roomMessages, scrollToBottom, showSearch]);
+  
   return (
     <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -580,7 +602,7 @@ const ChatRoom = () => {
         {/* Main Chat Area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           {/* Chat Messages */}
-          <div className="flex-1 overflow-y-auto p-4">
+          <div className="flex-1 overflow-y-auto p-4" ref={messagesEndRef} onScroll={handleMessagesScroll}>
             {roomMessages.length === 0 ? (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <p>No messages yet. Send the first message!</p>
@@ -619,6 +641,18 @@ const ChatRoom = () => {
                   </motion.div>
                 );
               })
+            )}
+            <div ref={messagesEndRef} />
+            
+            {/* Jump to bottom button */}
+            {showScrollButton && (
+              <button
+                onClick={scrollToBottom}
+                className="fixed bottom-20 right-4 bg-blue-500 text-white rounded-full p-2 shadow-lg hover:bg-blue-600 transition-all z-10"
+                aria-label="Jump to bottom"
+              >
+                <FiChevronDown className="text-xl" />
+              </button>
             )}
           </div>
           
