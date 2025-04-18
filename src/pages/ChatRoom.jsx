@@ -1,6 +1,1307 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight, FiLock, FiKey, FiShield, FiPlayCircle, FiPauseCircle, FiTrash2 } from 'react-icons/fi';
+import { FaMicrophone, FaStop, FaPause, FaPlay, FaVolumeUp } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
+import { FaPaperPlane } from 'react-icons/fa';
+import { useSelector } from "react-redux";
+
+const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
+  const [message, setMessage] = useState('');
+  const [roomMessages, setRoomMessages] = useState([]);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showUsersList, setShowUsersList] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState({});
+  const [typingTimeout, setTypingTimeout] = useState(null);
+  const [reactions, setReactions] = useState({});
+  const [activeReactionMessage, setActiveReactionMessage] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchResults, setSearchResults] = useState([]);
+  const [currentResultIndex, setCurrentResultIndex] = useState(-1);
+  const [users, setUsers] = useState([
+    { id: 1, username: 'Alice', status: 'online', lastSeen: null, customStatus: 'Working on project', isIdle: false },
+    { id: 2, username: 'Bob', status: 'away', lastSeen: new Date(Date.now() - 15 * 60000), customStatus: 'In a meeting', isIdle: true },
+    { id: 3, username: 'Charlie', status: 'offline', lastSeen: new Date(Date.now() - 120 * 60000), customStatus: '', isIdle: false },
+    { id: 4, username: 'David', status: 'online', lastSeen: null, customStatus: 'Available', isIdle: false },
+  ]);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const messagesEndRef = useRef(null);
+  const messagesContainerRef = useRef(null);
+  const [showThemeSettings, setShowThemeSettings] = useState(false);
+  const [customTheme, setCustomTheme] = useState({
+    primaryColor: '#3b82f6', // Default blue
+    secondaryColor: '#10b981', // Default green
+    accentColor: '#8b5cf6', // Default purple
+  });
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const recordingTimerRef = useRef(null);
+  const [showFileUpload, setShowFileUpload] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const fileInputRef = useRef(null);
+  const [notificationSettings, setNotificationSettings] = useState({
+    soundEnabled: true,
+    desktopEnabled: false,
+    mentionsOnly: false
+  });
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [hasPermission, setHasPermission] = useState(false);
+  const notificationAudio = useMemo(() => new Audio('/notification.mp3'), []);
+  const [attachments, setAttachments] = useState([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({});
+  const [userStatus, setUserStatus] = useState('online');
+  const [customStatusMessage, setCustomStatusMessage] = useState('');
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [idleTimeout, setIdleTimeout] = useState(null);
+  const [isIdle, setIsIdle] = useState(false);
+  const IDLE_TIME = 5 * 60 * 1000; // 5 minutes
+  const [activeThread, setActiveThread] = useState(null);
+  const [showThreads, setShowThreads] = useState(false);
+  const [threadReplies, setThreadReplies] = useState({});
+  const [threadParentLookup, setThreadParentLookup] = useState({});
+  const threadListRef = useRef(null);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [lastKeyPressTime, setLastKeyPressTime] = useState(0);
+  const [keySequence, setKeySequence] = useState([]);
+  const messageInputRef = useRef(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [imageDragPosition, setImageDragPosition] = useState({ x: 0, y: 0 });
+  const lightboxRef = useRef(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledMessages, setScheduledMessages] = useState([]);
+  const [showScheduledMessages, setShowScheduledMessages] = useState(false);
+  const [readReceipts, setReadReceipts] = useState({});
+  const [showReadReceipts, setShowReadReceipts] = useState(true);
+  const [translations, setTranslations] = useState({});
+  const [userLanguage, setUserLanguage] = useState('en');
+  const [autoTranslate, setAutoTranslate] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [supportedLanguages, setSupportedLanguages] = useState([
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'it', name: 'Italian' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'ar', name: 'Arabic' },
+  ]);
+  const [showLanguageSettings, setShowLanguageSettings] = useState(false);
+  const [bookmarks, setBookmarks] = useState([]);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [activeBookmark, setActiveBookmark] = useState(null);
+  const [bookmarkNote, setBookmarkNote] = useState('');
+  const [bookmarkCategories, setBookmarkCategories] = useState([
+    { id: 1, name: 'Important', color: 'red' },
+    { id: 2, name: 'Todo', color: 'green' },
+    { id: 3, name: 'Question', color: 'blue' },
+    { id: 4, name: 'Idea', color: 'purple' },
+    { id: 5, name: 'Follow-up', color: 'orange' }
+  ]);
+  const [bookmarkCategory, setBookmarkCategory] = useState(1);
+  const [showAddBookmarkModal, setShowAddBookmarkModal] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [messageSelection, setMessageSelection] = useState({ start: 0, end: 0 });
+  const [messageFormat, setMessageFormat] = useState({
+    bold: false,
+    italic: false,
+    code: false,
+    link: false,
+  });
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkText, setLinkText] = useState('');
+  const [showEncryptionSettings, setShowEncryptionSettings] = useState(false);
+  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
+  const [encryptionKey, setEncryptionKey] = useState('');
+  const [privateMessageUser, setPrivateMessageUser] = useState(null);
+  const [isPrivateMode, setIsPrivateMode] = useState(false);
+  const [encryptedMessages, setEncryptedMessages] = useState({});
+  const [keysExchanged, setKeysExchanged] = useState({});
+  
+  // Enhanced audio recording and playback state
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioBlob, setAudioBlob] = useState(null);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const recordingTimerRef = useRef(null);
+  const [recordingQuality, setRecordingQuality] = useState('standard'); // 'low', 'standard', 'high'
+  const [playingAudioId, setPlayingAudioId] = useState(null);
+  const [audioProgress, setAudioProgress] = useState({});
+  const audioRefs = useRef({});
+  const progressIntervals = useRef({});
+  const [audioMessages, setAudioMessages] = useState({});
+  const [soundEffects, setSoundEffects] = useState({
+    recordStart: new Audio('/sounds/record-start.mp3'),
+    recordStop: new Audio('/sounds/record-stop.mp3'),
+    messageSent: new Audio('/sounds/message-sent.mp3')
+  });
+  
+  const { roomId } = useParams();
+  const messageRefs = useRef({});
+  
+  // Animation variants for messages
+  const bubbleVariants = {
+    tap: { scale: 0.98 },
+    hover: { scale: 1.02 }
+  };
+  
+  // Animation variants for notifications
+  const notificationVariants = {
+    initial: { opacity: 0, y: -50 },
+    animate: { opacity: 1, y: 0 },
+    exit: { opacity: 0, y: -50 }
+  };
+  
+  // Show notification
+  const showNotification = (message, type = 'info') => {
+    const id = Date.now();
+    setNotifications(prev => [...prev, { id, message, type }]);
+    
+    // Auto-remove notification after 3 seconds
+    setTimeout(() => {
+      setNotifications(prev => prev.filter(n => n.id !== id));
+    }, 3000);
+  };
+  
+  // Search messages
+  const handleSearch = (e) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    
+    const query = searchQuery.toLowerCase();
+    const results = roomMessages.filter(msg => 
+      msg.text.toLowerCase().includes(query)
+    );
+    
+    setSearchResults(results);
+    setCurrentResultIndex(results.length > 0 ? 0 : -1);
+    
+    if (results.length === 0) {
+      showNotification('No messages found', 'info');
+    } else {
+      scrollToMessage(results[0].id);
+      showNotification(`Found ${results.length} messages`, 'success');
+    }
+  };
+  
+  // Navigate between search results
+  const navigateResults = (direction) => {
+    if (searchResults.length === 0) return;
+    
+    let newIndex;
+    if (direction === 'next') {
+      newIndex = (currentResultIndex + 1) % searchResults.length;
+    } else {
+      newIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length;
+    }
+    
+    setCurrentResultIndex(newIndex);
+    scrollToMessage(searchResults[newIndex].id);
+  };
+  
+  // Scroll to a specific message
+  const scrollToMessage = (messageId) => {
+    if (messageRefs.current[messageId]) {
+      messageRefs.current[messageId].scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+      
+      // Highlight message briefly
+      const element = messageRefs.current[messageId];
+      element.classList.add('bg-yellow-100', 'dark:bg-yellow-900');
+      setTimeout(() => {
+        element.classList.remove('bg-yellow-100', 'dark:bg-yellow-900');
+      }, 1500);
+    }
+  };
+  
+  // Apply formatting to message
+  const applyFormatting = (type) => {
+    const input = document.getElementById('message-input');
+    if (!input) return;
+    
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const text = message;
+    const selectedText = text.substring(start, end);
+    
+    let formattedText = '';
+    switch (type) {
+      case 'bold':
+        formattedText = `**${selectedText}**`;
+        break;
+      case 'italic':
+        formattedText = `_${selectedText}_`;
+        break;
+      default:
+        return;
+    }
+    
+    const newText = text.substring(0, start) + formattedText + text.substring(end);
+    setMessage(newText);
+    
+    // Focus back on input after formatting
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(start + 2, end + 2);
+    }, 0);
+  };
+  
+  // Handle typing indicator
+  const handleTyping = () => {
+    // Simulate sending typing status to server
+    setIsTyping(true);
+    
+    // Clear previous timeout
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+    
+    // Set new timeout
+    const timeout = setTimeout(() => {
+      setIsTyping(false);
+    }, 3000);
+    
+    setTypingTimeout(timeout);
+  };
+  
+  // Handle adding a reaction to a message
+  const handleAddReaction = (emoji, messageId) => {
+    const currentUserId = 1; // Assuming current user ID
+    
+    // Update reactions state
+    setReactions(prevReactions => {
+      // Get existing reactions for this message
+      const messageReactions = prevReactions[messageId] || [];
+      
+      // Check if user already reacted with this emoji
+      const existingReactionIndex = messageReactions.findIndex(
+        r => r.emoji === emoji && r.userId === currentUserId
+      );
+      
+      let updatedMessageReactions;
+      
+      if (existingReactionIndex >= 0) {
+        // Remove reaction if it already exists
+        updatedMessageReactions = [
+          ...messageReactions.slice(0, existingReactionIndex),
+          ...messageReactions.slice(existingReactionIndex + 1)
+        ];
+      } else {
+        // Add new reaction
+        updatedMessageReactions = [
+          ...messageReactions,
+          { emoji, userId: currentUserId, username: 'You' }
+        ];
+      }
+      
+      return {
+        ...prevReactions,
+        [messageId]: updatedMessageReactions
+      };
+    });
+    
+    setActiveReactionMessage(null);
+  };
+  
+  // Render reactions for a message
+  const renderReactions = (messageId) => {
+    const messageReactions = reactions[messageId] || [];
+    
+    if (messageReactions.length === 0) {
+      return null;
+    }
+    
+    // Group reactions by emoji
+    const groupedReactions = messageReactions.reduce((acc, reaction) => {
+      if (!acc[reaction.emoji]) {
+        acc[reaction.emoji] = [];
+      }
+      acc[reaction.emoji].push(reaction);
+      return acc;
+    }, {});
+    
+    return (
+      <div className="flex flex-wrap gap-1 mt-1">
+        {Object.entries(groupedReactions).map(([emoji, users]) => (
+          <button
+            key={emoji}
+            onClick={() => handleAddReaction(emoji, messageId)}
+            className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-2 py-0.5 text-xs flex items-center space-x-1 hover:bg-gray-200 dark:hover:bg-gray-600"
+            title={users.map(u => u.username).join(', ')}
+          >
+            <span>{emoji}</span>
+            <span>{users.length}</span>
+          </button>
+        ))}
+      </div>
+    );
+  };
+  
+  // Simulate other users typing (for demo purposes)
+  useEffect(() => {
+    // Randomly have Bob or Alice start typing
+    const randomStartTyping = () => {
+      const randomUser = Math.random() > 0.5 ? 
+        { id: 2, username: 'Bob' } : 
+        { id: 1, username: 'Alice' };
+      
+      setTypingUsers(prev => ({
+        ...prev,
+        [randomUser.id]: randomUser.username
+      }));
+      
+      // Stop typing after random time
+      setTimeout(() => {
+        setTypingUsers(prev => {
+          const newTypingUsers = { ...prev };
+          delete newTypingUsers[randomUser.id];
+          return newTypingUsers;
+        });
+      }, 2000 + Math.random() * 3000);
+    };
+    
+    // Set interval for random typing events
+    const typingInterval = setInterval(() => {
+      if (Math.random() > 0.7) {
+        randomStartTyping();
+      }
+    }, 5000);
+    
+    return () => clearInterval(typingInterval);
+  }, []);
+  
+  // Render typing indicator
+  const renderTypingIndicator = () => {
+    const typingUsersList = Object.keys(typingUsers).map(id => typingUsers[id]);
+    
+    if (typingUsersList.length === 0) {
+      return null;
+    }
+    
+    let typingText = '';
+    if (typingUsersList.length === 1) {
+      typingText = `${typingUsersList[0]} is typing...`;
+    } else if (typingUsersList.length === 2) {
+      typingText = `${typingUsersList[0]} and ${typingUsersList[1]} are typing...`;
+    } else {
+      typingText = 'Several people are typing...';
+    }
+    
+    return (
+      <div className="text-xs text-gray-500 italic p-2 animate-pulse">
+        {typingText}
+        <span className="inline-block">
+          <span className="dots-typing">
+            <span>.</span><span>.</span><span>.</span>
+          </span>
+        </span>
+      </div>
+    );
+  };
+  
+  // Add styles for typing dots animation
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes dotTyping {
+        0% { opacity: 0; }
+        50% { opacity: 1; }
+        100% { opacity: 0; }
+      }
+      
+      .dots-typing span {
+        animation: dotTyping 1.5s infinite;
+        display: inline-block;
+        opacity: 0;
+      }
+      
+      .dots-typing span:nth-child(1) {
+        animation-delay: 0s;
+      }
+      
+      .dots-typing span:nth-child(2) {
+        animation-delay: 0.5s;
+      }
+      
+      .dots-typing span:nth-child(3) {
+        animation-delay: 1s;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
+  // Add emoji to message
+  const addEmoji = (emoji) => {
+    setMessage(message + emoji);
+    setShowEmojiPicker(false);
+  };
+  
+  // Get status color
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'online':
+        return 'bg-green-500';
+      case 'away':
+        return 'bg-yellow-500';
+      case 'busy':
+        return 'bg-red-500';
+      case 'offline':
+        return 'bg-gray-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+  
+  // Get notification color
+  const getNotificationColor = (type) => {
+    switch (type) {
+      case 'success':
+        return 'bg-green-500';
+      case 'error':
+        return 'bg-red-500';
+      case 'warning':
+        return 'bg-yellow-500';
+      case 'command':
+        return 'bg-purple-500';
+      default:
+        return 'bg-blue-500';
+    }
+  };
+  
+  // Handle send message
+  const handleSendMessage = (e) => {
+    e.preventDefault();
+    if (message.trim()) {
+      const newMessage = { 
+        id: Date.now(),
+        text: message,
+        timestamp: new Date().toISOString(),
+        userId: 1, // Assuming current user
+        username: 'You'
+      };
+      
+      setRoomMessages([...roomMessages, newMessage]);
+      setMessage('');
+      showNotification('Message sent', 'success');
+    }
+  };
+  
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setCurrentResultIndex(-1);
+    setShowSearch(false);
+  };
+  
+  // Add some sample messages for testing search
+  useEffect(() => {
+    if (roomMessages.length === 0) {
+      const sampleMessages = [
+        { id: 1, text: "Hello everyone!", timestamp: new Date().toISOString(), userId: 2, username: "Alice" },
+        { id: 2, text: "Hi Alice, how are you doing today?", timestamp: new Date().toISOString(), userId: 3, username: "Bob" },
+        { id: 3, text: "I'm doing great, thanks for asking!", timestamp: new Date().toISOString(), userId: 2, username: "Alice" },
+        { id: 4, text: "Welcome to our chat room", timestamp: new Date().toISOString(), userId: 4, username: "David" },
+        { id: 5, text: "Has anyone seen the latest product update?", timestamp: new Date().toISOString(), userId: 3, username: "Bob" },
+      ];
+      setRoomMessages(sampleMessages);
+    }
+  }, [roomMessages.length]);
+  
+  // Format message text with markdown support
+  const formatMessageText = (text) => {
+    if (!text) return null;
+    
+    // Process markdown
+    // 1. Code blocks
+    let formattedText = text.replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-800 text-gray-200 p-2 rounded my-1 overflow-x-auto">$1</pre>');
+    
+    // 2. Inline code
+    formattedText = formattedText.replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$1</code>');
+    
+    // 3. Bold
+    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // 4. Italic
+    formattedText = formattedText.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    // 5. Links
+    formattedText = formattedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
+    
+    // 6. Auto-detect URLs not in markdown format
+    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
+    formattedText = formattedText.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
+    
+    return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
+  };
+  
+  // Auto-scroll function that scrolls to the bottom of messages
+  const scrollToBottom = (behavior = 'auto') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Check if should show the jump to bottom button
+  const handleMessagesScroll = () => {
+    if (!messagesContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+    
+    // Only show button when not at bottom and have some scroll distance
+    setShowScrollButton(!isAtBottom && scrollHeight > clientHeight + 200);
+  };
+
+  // Scroll to bottom when new messages arrive if already at bottom
+  useEffect(() => {
+    if (roomMessages.length > 0) {
+      // Auto-scroll only if user was already at the bottom
+      if (!showScrollButton) {
+        scrollToBottom();
+      }
+    }
+  }, [roomMessages, showScrollButton]);
+
+  // Scroll to bottom on initial load and room change
+  useEffect(() => {
+    scrollToBottom();
+  }, [roomId]);
+  
+  // Apply custom theme colors to CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--primary-color', customTheme.primaryColor);
+    document.documentElement.style.setProperty('--secondary-color', customTheme.secondaryColor);
+    document.documentElement.style.setProperty('--accent-color', customTheme.accentColor);
+  }, [customTheme]);
+
+  const handleThemeChange = (property, value) => {
+    setCustomTheme(prev => ({
+      ...prev,
+      [property]: value
+    }));
+  };
+
+  const renderThemeSettings = () => {
+    if (!showThemeSettings) return null;
+
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        className="absolute right-0 top-16 z-50 w-72 rounded-lg bg-white dark:bg-gray-800 p-4 shadow-lg"
+      >
+        <h3 className="font-semibold mb-3 text-gray-700 dark:text-gray-200">Customize Theme</h3>
+        
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Primary Color
+            </label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={customTheme.primaryColor}
+                onChange={(e) => handleThemeChange('primaryColor', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customTheme.primaryColor}
+                onChange={(e) => handleThemeChange('primaryColor', e.target.value)}
+                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
+              />
+              <button
+                onClick={() => handleThemeChange('primaryColor', '#3b82f6')}
+                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Secondary Color
+            </label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={customTheme.secondaryColor}
+                onChange={(e) => handleThemeChange('secondaryColor', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customTheme.secondaryColor}
+                onChange={(e) => handleThemeChange('secondaryColor', e.target.value)}
+                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
+              />
+              <button
+                onClick={() => handleThemeChange('secondaryColor', '#10b981')}
+                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Accent Color
+            </label>
+            <div className="flex items-center">
+              <input
+                type="color"
+                value={customTheme.accentColor}
+                onChange={(e) => handleThemeChange('accentColor', e.target.value)}
+                className="h-8 w-8 rounded cursor-pointer"
+              />
+              <input
+                type="text"
+                value={customTheme.accentColor}
+                onChange={(e) => handleThemeChange('accentColor', e.target.value)}
+                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
+              />
+              <button
+                onClick={() => handleThemeChange('accentColor', '#8b5cf6')}
+                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 flex justify-end">
+          <button 
+            onClick={() => setShowThemeSettings(false)}
+            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+          >
+            Close
+          </button>
+        </div>
+      </motion.div>
+    );
+  };
+  
+  const [isScrolledUp, setIsScrolledUp] = useState(false);
+  const [newMessagesCount, setNewMessagesCount] = useState(0);
+  
+  // Add scroll position tracking
+  useEffect(() => {
+    const chatContainer = messagesEndRef.current;
+    if (!chatContainer) return;
+    
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
+      
+      setIsScrolledUp(!isAtBottom);
+      
+      // Reset new messages count when scrolled to bottom
+      if (isAtBottom) {
+        setNewMessagesCount(0);
+      }
+    };
+    
+    chatContainer.addEventListener('scroll', handleScroll);
+    return () => chatContainer.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    if (roomMessages.length && messagesEndRef.current) {
+      if (!isScrolledUp) {
+        scrollToBottom();
+      } else {
+        // Increment new messages count when user is scrolled up
+        setNewMessagesCount(prev => prev + 1);
+      }
+    }
+  }, [roomMessages.length]);
+  
+  // Enhanced voice recording with quality options
+  const startRecording = async () => {
+    try {
+      // Play record start sound
+      soundEffects.recordStart.play().catch(err => console.error("Could not play sound effect:", err));
+      
+      const constraints = { audio: true };
+      
+      // Set audio quality based on selected option
+      if (recordingQuality !== 'standard') {
+        constraints.audio = {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          sampleRate: recordingQuality === 'high' ? 48000 : 16000,
+          sampleSize: recordingQuality === 'high' ? 24 : 16
+        };
+      }
+      
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      const options = { mimeType: 'audio/webm' };
+      const recorder = new MediaRecorder(stream, options);
+      const chunks = [];
+      
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+      
+      recorder.onstop = () => {
+        // Play record stop sound
+        soundEffects.recordStop.play().catch(err => console.error("Could not play sound effect:", err));
+        
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        
+        // Create audio URL for preview
+        const audioURL = URL.createObjectURL(blob);
+        const audio = new Audio(audioURL);
+        
+        // Calculate audio duration
+        audio.addEventListener('loadedmetadata', () => {
+          const duration = Math.round(audio.duration);
+          setAudioMessages(prev => ({
+            ...prev,
+            preview: {
+              id: 'preview',
+              url: audioURL,
+              blob,
+              duration,
+              timestamp: new Date().toISOString()
+            }
+          }));
+        });
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      // Start recording
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingTime(0);
+      
+      // Setup timer to track recording duration
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+      
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      toast.error("Could not access microphone. Please check permissions.");
+    }
+  };
+  
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+    }
+  };
+  
+  const cancelRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      clearInterval(recordingTimerRef.current);
+      
+      // Discard the recording
+      setTimeout(() => {
+        setAudioBlob(null);
+        setAudioMessages(prev => {
+          const newState = { ...prev };
+          delete newState.preview;
+          return newState;
+        });
+      }, 100);
+    }
+  };
+  
+  const sendVoiceMessage = async () => {
+    if (!audioBlob) return;
+    
+    try {
+      // Play message sent sound
+      soundEffects.messageSent.play().catch(err => console.error("Could not play sound effect:", err));
+      
+      // Convert blob to base64 (for API transmission)
+      const reader = new FileReader();
+      reader.readAsDataURL(audioBlob);
+      reader.onloadend = () => {
+        const base64Audio = reader.result;
+        const audioUrl = URL.createObjectURL(audioBlob);
+        
+        // Create new audio message
+        const audioMessageId = Date.now();
+        const newMessage = {
+          id: audioMessageId,
+          text: '🎤 Voice Message',
+          timestamp: new Date().toISOString(),
+          userId: 1, // Current user 
+          username: 'You',
+          type: 'audio',
+          audio: {
+            url: audioUrl,
+            duration: audioMessages.preview?.duration || 0,
+            transcription: ''  // Would be filled by a speech-to-text service
+          }
+        };
+        
+        // Add message to room messages
+        setRoomMessages(prev => [...prev, newMessage]);
+        
+        // Update audio messages state
+        setAudioMessages(prev => {
+          const newState = { ...prev };
+          delete newState.preview; // Remove preview
+          newState[audioMessageId] = {
+            id: audioMessageId,
+            url: audioUrl,
+            blob: audioBlob,
+            duration: audioMessages.preview?.duration || 0,
+            timestamp: new Date().toISOString()
+          };
+          return newState;
+        });
+        
+        // Reset audio state
+        setAudioBlob(null);
+        
+        // In a real app, you would send this to the server
+        // socket.emit('audioMessage', { room, username, audioBase64: base64Audio, duration: audioMessages.preview?.duration || 0 });
+        
+        // Show notification
+        showNotification('Voice message sent', 'success');
+      };
+    } catch (err) {
+      console.error("Error sending voice message:", err);
+      toast.error("Failed to send voice message");
+    }
+  };
+  
+  // Format seconds to MM:SS
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const secs = Math.floor(seconds % 60).toString().padStart(2, '0');
+    return `${mins}:${secs}`;
+  };
+  
+  // Play/pause audio message
+  const toggleAudioPlayback = (audioId) => {
+    const audioElement = audioRefs.current[audioId];
+    if (!audioElement) return;
+    
+    // If this is already the playing audio
+    if (playingAudioId === audioId) {
+      if (audioElement.paused) {
+        audioElement.play().catch(err => console.error("Error playing audio:", err));
+      } else {
+        audioElement.pause();
+      }
+    } else {
+      // If another audio is playing, pause it first
+      if (playingAudioId && audioRefs.current[playingAudioId]) {
+        audioRefs.current[playingAudioId].pause();
+        
+        // Clear the progress interval for the previous audio
+        if (progressIntervals.current[playingAudioId]) {
+          clearInterval(progressIntervals.current[playingAudioId]);
+        }
+      }
+      
+      // Play the new audio
+      setPlayingAudioId(audioId);
+      audioElement.currentTime = 0;
+      audioElement.play().catch(err => console.error("Error playing audio:", err));
+      
+      // Setup progress tracking
+      progressIntervals.current[audioId] = setInterval(() => {
+        setAudioProgress(prev => ({
+          ...prev,
+          [audioId]: (audioElement.currentTime / audioElement.duration) * 100
+        }));
+        
+        // Stop interval if audio ended
+        if (audioElement.ended) {
+          clearInterval(progressIntervals.current[audioId]);
+          setPlayingAudioId(null);
+        }
+      }, 100);
+      
+      // Setup ended event
+      audioElement.onended = () => {
+        setPlayingAudioId(null);
+        if (progressIntervals.current[audioId]) {
+          clearInterval(progressIntervals.current[audioId]);
+        }
+      };
+    }
+  };
+  
+  // Transcribe audio to text (mock for demo)
+  const transcribeAudio = (audioId) => {
+    // In a real app, this would call a speech-to-text API
+    // Here we'll just simulate it
+    
+    showNotification('Transcribing voice message...', 'info');
+    
+    // Simulate API delay
+    setTimeout(() => {
+      const mockTranscriptions = [
+        "Hey everyone, just checking in!",
+        "I wanted to discuss the project timeline.",
+        "Let's schedule a meeting for tomorrow.",
+        "Great work on the latest feature!",
+        "I have some feedback on the new design."
+      ];
+      
+      const randomTranscription = mockTranscriptions[Math.floor(Math.random() * mockTranscriptions.length)];
+      
+      // Update message with transcription
+      setRoomMessages(prev => 
+        prev.map(msg => 
+          msg.id === audioId
+            ? { ...msg, audio: { ...msg.audio, transcription: randomTranscription } }
+            : msg
+        )
+      );
+      
+      showNotification('Transcription complete', 'success');
+    }, 2000);
+  };
+  
+  // Audio message visualization animation variants
+  const audioWaveVariants = {
+    playing: {
+      scale: [1, 1.2, 1, 0.8, 1],
+      transition: {
+        repeat: Infinity,
+        duration: 1.5
+      }
+    },
+    paused: {
+      scale: 1
+    }
+  };
+  
+  // Render audio recording UI
+  const renderAudioRecording = () => {
+    if (!isRecording && !audioBlob) return null;
+    
+    if (isRecording) {
+      return (
+        <div className="flex items-center space-x-3 p-2 bg-red-50 dark:bg-red-900 dark:bg-opacity-20 rounded-md border border-red-200 dark:border-red-800">
+          <div className="flex-shrink-0">
+            <div className="w-10 h-10 rounded-full bg-red-500 text-white flex items-center justify-center animate-pulse">
+              <FaMicrophone />
+            </div>
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-red-600 dark:text-red-400">Recording...</div>
+              <div className="text-sm text-red-600 dark:text-red-400">{formatTime(recordingTime)}</div>
+            </div>
+            <div className="h-2 mt-1">
+              <div className="voice-wave flex items-center space-x-1">
+                {[...Array(20)].map((_, i) => (
+                  <div 
+                    key={i} 
+                    className="voice-wave-bar bg-red-400 dark:bg-red-500" 
+                    style={{ 
+                      height: `${Math.max(3, Math.min(16, Math.random() * 16))}px`,
+                      width: '2px',
+                      animationDelay: `${i * 0.05}s`
+                    }} 
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex-shrink-0 flex space-x-2">
+            <button
+              onClick={cancelRecording}
+              className="p-2 bg-gray-200 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+              title="Cancel"
+            >
+              <FiTrash2 size={18} />
+            </button>
+            <button
+              onClick={stopRecording}
+              className="p-2 bg-red-500 rounded-full text-white hover:bg-red-600"
+              title="Stop recording"
+            >
+              <FaStop size={18} />
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    // Show audio preview with send option
+    if (audioBlob && audioMessages.preview) {
+      return (
+        <div className="flex items-center space-x-3 p-2 bg-blue-50 dark:bg-blue-900 dark:bg-opacity-20 rounded-md border border-blue-200 dark:border-blue-800">
+          <div className="flex-shrink-0">
+            <button
+              onClick={() => toggleAudioPlayback('preview')}
+              className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600"
+            >
+              {playingAudioId === 'preview' ? <FaPause /> : <FaPlay />}
+            </button>
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-medium text-blue-600 dark:text-blue-400">Voice message preview</div>
+              <div className="text-sm text-blue-600 dark:text-blue-400">
+                {formatTime(playingAudioId === 'preview' 
+                  ? (audioProgress.preview / 100) * audioMessages.preview.duration 
+                  : audioMessages.preview.duration)}
+              </div>
+            </div>
+            <div className="h-2 mt-1 bg-blue-100 dark:bg-blue-800 rounded overflow-hidden">
+              <div 
+                className="h-full bg-blue-500"
+                style={{ width: `${audioProgress.preview || 0}%` }}
+              />
+            </div>
+            <audio 
+              ref={el => audioRefs.current.preview = el} 
+              src={audioMessages.preview.url} 
+              preload="metadata"
+              className="hidden"
+            />
+          </div>
+          <div className="flex-shrink-0 flex space-x-2">
+            <button
+              onClick={() => {
+                setAudioBlob(null);
+                setAudioMessages(prev => {
+                  const newState = { ...prev };
+                  delete newState.preview;
+                  return newState;
+                });
+              }}
+              className="p-2 bg-gray-200 dark:bg-gray-700 rounded-full text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
+              title="Discard"
+            >
+              <FiTrash2 size={18} />
+            </button>
+            <button
+              onClick={sendVoiceMessage}
+              className="p-2 bg-blue-500 rounded-full text-white hover:bg-blue-600"
+              title="Send voice message"
+            >
+              <FaPaperPlane size={18} />
+            </button>
+          </div>
+        </div>
+      );
+    }
+    
+    return null;
+  };
+  
+  // Render audio message in chat
+  const renderAudioMessage = (message) => {
+    if (message.type !== 'audio' || !message.audio) return null;
+    
+    const isPlaying = playingAudioId === message.id;
+    const progress = audioProgress[message.id] || 0;
+    const transcription = message.audio.transcription;
+    
+    return (
+      <div className="mt-1 max-w-xs">
+        <div className="flex items-center space-x-2 bg-gray-100 dark:bg-gray-800 p-2 rounded-lg">
+          <button
+            onClick={() => toggleAudioPlayback(message.id)}
+            className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center hover:bg-blue-600 flex-shrink-0"
+          >
+            {isPlaying ? <FaPause size={14} /> : <FaPlay size={14} />}
+          </button>
+          
+          <div className="flex-1">
+            <div className="flex items-center space-x-2">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {formatTime(isPlaying 
+                  ? (progress / 100) * message.audio.duration 
+                  : message.audio.duration)}
+              </span>
+              
+              <div className="flex-1 h-1.5 bg-gray-200 dark:bg-gray-700 rounded overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 transition-all duration-100"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+              
+              <div className="flex space-x-1">
+                {!transcription && (
+                  <button
+                    onClick={() => transcribeAudio(message.id)}
+                    className="text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400"
+                    title="Transcribe"
+                  >
+                    <FiEdit size={14} />
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    // Download functionality
+                    const a = document.createElement('a');
+                    a.href = message.audio.url;
+                    a.download = `voice-message-${new Date(message.timestamp).toISOString().replace(/:/g, '-')}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  className="text-gray-500 hover:text-blue-500 dark:text-gray-400 dark:hover:text-blue-400"
+                  title="Download"
+                >
+                  <FiDownload size={14} />
+                </button>
+              </div>
+            </div>
+            
+            <audio 
+              ref={el => audioRefs.current[message.id] = el} 
+              src={message.audio.url} 
+              preload="metadata"
+              className="hidden"
+            />
+          </div>
+        </div>
+        
+        {transcription && (
+          <div className="mt-1 text-xs text-gray-600 dark:text-gray-400 italic bg-gray-50 dark:bg-gray-900 p-1.5 rounded border border-gray-200 dark:border-gray-700">
+            <FiVolumeX size={12} className="inline mr-1" />
+            {transcription}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Update CSS for voice wave animation
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes voiceWave {
+        0% { height: 3px; }
+        50% { height: 12px; }
+        100% { height: 3px; }
+      }
+      
+      .voice-wave-bar {
+        animation: voiceWave 1s ease-in-out infinite;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+  
+  // Add voice recording quality settings
+  const renderVoiceSettings = () => (
+    <div className="mt-3">
+      <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Voice Recording Quality</h4>
+      <div className="flex space-x-2">
+        <button
+          onClick={() => setRecordingQuality('low')}
+          className={`px-3 py-1 text-xs rounded ${
+            recordingQuality === 'low'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          }`}
+        >
+          Low (Small Size)
+        </button>
+        <button
+          onClick={() => setRecordingQuality('standard')}
+          className={`px-3 py-1 text-xs rounded ${
+            recordingQuality === 'standard'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          }`}
+        >
+          Standard
+        </button>
+        <button
+          onClick={() => setRecordingQuality('high')}
+          className={`px-3 py-1 text-xs rounded ${
+            recordingQuality === 'high'
+              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+              : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+          }`}
+        >
+          High (Better Quality)
+        </button>
+      </div>
+    </div>
+  );
+  
+  // Cleanup audio resources when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up all intervals
+      Object.values(progressIntervals.current).forEach(interval => {
+        clearInterval(interval);
+      });
+      
+      // Clean up all audio elements
+      Object.entries(audioRefs.current).forEach(([id, audio]) => {
+        if (audio) {
+          audio.pause();
+          audio.src = '';
+        }
+      });
+      
+      // Clean up any blob URLs
+      Object.values(audioMessages).forEach(msg => {
+        if (msg.url) {
+          URL.revokeObjectURL(msg.url);
+        }
+      });
+    };
+  }, [audioMessages]);
+  
+  // Handle file selection
+  const handleFileSelect = (event) => {
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight, FiLock, FiKey, FiShield } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
