@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -75,6 +75,11 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [lastKeyPressTime, setLastKeyPressTime] = useState(0);
   const [keySequence, setKeySequence] = useState([]);
   const messageInputRef = useRef(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [imageScale, setImageScale] = useState(1);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [imageDragPosition, setImageDragPosition] = useState({ x: 0, y: 0 });
+  const lightboxRef = useRef(null);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -1840,6 +1845,306 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
   
+  // Open image in lightbox
+  const openLightbox = (imageUrl, altText = '') => {
+    setLightboxImage({
+      url: imageUrl,
+      alt: altText
+    });
+    setImageScale(1);
+    setImageRotation(0);
+    setImageDragPosition({ x: 0, y: 0 });
+    
+    // Disable body scroll when lightbox is open
+    document.body.style.overflow = 'hidden';
+  };
+  
+  // Close lightbox
+  const closeLightbox = () => {
+    setLightboxImage(null);
+    setImageScale(1);
+    setImageRotation(0);
+    
+    // Re-enable body scroll
+    document.body.style.overflow = 'auto';
+  };
+  
+  // Zoom in/out image
+  const zoomImage = (zoomIn) => {
+    setImageScale(prevScale => {
+      const newScale = zoomIn 
+        ? Math.min(prevScale + 0.5, 5) // Max zoom 5x
+        : Math.max(prevScale - 0.5, 0.5); // Min zoom 0.5x
+      return newScale;
+    });
+  };
+  
+  // Rotate image
+  const rotateImage = () => {
+    setImageRotation(prev => (prev + 90) % 360);
+  };
+  
+  // Reset image transformations
+  const resetImage = () => {
+    setImageScale(1);
+    setImageRotation(0);
+    setImageDragPosition({ x: 0, y: 0 });
+  };
+  
+  // Handle lightbox key controls
+  useEffect(() => {
+    if (!lightboxImage) return;
+    
+    const handleKeyDown = (e) => {
+      switch (e.key) {
+        case 'Escape':
+          closeLightbox();
+          break;
+        case '+':
+          zoomImage(true);
+          break;
+        case '-':
+          zoomImage(false);
+          break;
+        case 'r':
+          rotateImage();
+          break;
+        case '0':
+          resetImage();
+          break;
+        default:
+          break;
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [lightboxImage]);
+  
+  // Handle mouse wheel zoom on image
+  const handleMouseWheel = useCallback((e) => {
+    if (lightboxImage) {
+      e.preventDefault();
+      zoomImage(e.deltaY < 0);
+    }
+  }, [lightboxImage]);
+  
+  useEffect(() => {
+    const lightboxElement = lightboxRef.current;
+    if (lightboxElement) {
+      lightboxElement.addEventListener('wheel', handleMouseWheel, { passive: false });
+      return () => lightboxElement.removeEventListener('wheel', handleMouseWheel);
+    }
+  }, [handleMouseWheel, lightboxImage]);
+
+  // Render lightbox
+  const renderLightbox = () => {
+    if (!lightboxImage) return null;
+    
+    return (
+      <motion.div 
+        className="fixed inset-0 z-50 bg-black bg-opacity-90 flex items-center justify-center"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        ref={lightboxRef}
+      >
+        {/* Close button */}
+        <button 
+          className="absolute top-4 right-4 text-white p-2 hover:bg-gray-800 rounded-full z-10"
+          onClick={closeLightbox}
+        >
+          <FiX size={24} />
+        </button>
+        
+        {/* Lightbox controls */}
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center space-x-3">
+          <button 
+            className="p-3 bg-gray-800 bg-opacity-70 rounded-full text-white hover:bg-gray-700"
+            onClick={() => zoomImage(true)}
+            title="Zoom In (+)"
+          >
+            <FiZoomIn size={20} />
+          </button>
+          <button 
+            className="p-3 bg-gray-800 bg-opacity-70 rounded-full text-white hover:bg-gray-700"
+            onClick={() => zoomImage(false)}
+            title="Zoom Out (-)"
+          >
+            <FiZoomOut size={20} />
+          </button>
+          <button 
+            className="p-3 bg-gray-800 bg-opacity-70 rounded-full text-white hover:bg-gray-700"
+            onClick={rotateImage}
+            title="Rotate (R)"
+          >
+            <FiRotateCw size={20} />
+          </button>
+          <button 
+            className="p-3 bg-gray-800 bg-opacity-70 rounded-full text-white hover:bg-gray-700"
+            onClick={resetImage}
+            title="Reset (0)"
+          >
+            <FiMaximize size={20} />
+          </button>
+        </div>
+        
+        {/* Image container */}
+        <motion.div
+          drag
+          dragConstraints={{ left: -500, right: 500, top: -500, bottom: 500 }}
+          onDragEnd={(e, info) => {
+            setImageDragPosition({
+              x: imageDragPosition.x + info.offset.x,
+              y: imageDragPosition.y + info.offset.y
+            });
+          }}
+          style={{
+            cursor: 'grab',
+            rotateZ: imageRotation,
+            scale: imageScale,
+            x: imageDragPosition.x,
+            y: imageDragPosition.y
+          }}
+          className="relative max-w-[90vw] max-h-[80vh]"
+        >
+          <img 
+            src={lightboxImage.url} 
+            alt={lightboxImage.alt}
+            className="pointer-events-none max-w-full max-h-[80vh] object-contain"
+            onDoubleClick={() => zoomImage(imageScale < 2)}
+          />
+        </motion.div>
+      </motion.div>
+    );
+  };
+  
+  // Enhanced image display in message
+  const renderEnhancedAttachmentInMessage = (message) => {
+    if (!message.attachment) return null;
+    
+    return (
+      <div className="mt-2 max-w-xs">
+        {message.attachment.isImage ? (
+          <div className="rounded-lg overflow-hidden cursor-pointer group relative">
+            <div 
+              className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => openLightbox(message.attachment.url, message.attachment.name)}
+            >
+              <FiMaximize className="text-white text-lg" />
+            </div>
+            <img 
+              src={message.attachment.url} 
+              alt={message.attachment.name}
+              className="max-w-full max-h-60 object-contain"
+              onClick={() => openLightbox(message.attachment.url, message.attachment.name)}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center p-2 rounded-lg bg-gray-100 dark:bg-gray-800">
+            <FiFile className="mr-2 text-blue-500" />
+            <div className="flex-1 overflow-hidden">
+              <div className="truncate text-sm">{message.attachment.name}</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400">
+                {(message.attachment.size / 1024).toFixed(2)} KB
+              </div>
+            </div>
+            <a 
+              href={message.attachment.url}
+              download={message.attachment.name}
+              className="p-1 bg-blue-500 rounded text-white ml-2"
+            >
+              <FiDownload size={16} />
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  // Enhanced attachment previews 
+  const renderEnhancedAttachmentPreviews = () => {
+    if (attachments.length === 0) return null;
+    
+    return (
+      <div className="flex flex-wrap gap-2 p-2 border-t border-gray-200 dark:border-gray-700">
+        {attachments.map(attachment => (
+          <div key={attachment.id} className="relative group">
+            {attachment.type.startsWith('image/') ? (
+              <div className="relative w-24 h-24 rounded overflow-hidden">
+                <img 
+                  src={attachment.preview} 
+                  alt={attachment.name} 
+                  className="w-full h-full object-cover"
+                  onClick={() => openLightbox(attachment.preview, attachment.name)}
+                />
+                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 flex items-center justify-center transition-opacity">
+                  <div className="flex space-x-1">
+                    <button 
+                      onClick={() => openLightbox(attachment.preview, attachment.name)} 
+                      className="p-1 bg-gray-800 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <FiMaximize size={14} />
+                    </button>
+                    <button 
+                      onClick={() => uploadAttachment(attachment)}
+                      className="p-1 bg-green-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <FiDownload size={14} />
+                    </button>
+                    <button 
+                      onClick={() => removeAttachment(attachment.id)}
+                      className="p-1 bg-red-500 rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <FiX size={14} />
+                    </button>
+                  </div>
+                </div>
+                {uploadProgress[attachment.id] > 0 && uploadProgress[attachment.id] < 100 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ width: `${uploadProgress[attachment.id]}%` }}
+                    ></div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative w-24 h-24 bg-gray-100 dark:bg-gray-800 rounded flex flex-col items-center justify-center p-2">
+                <FiFile size={20} className="text-gray-500 mb-1" />
+                <div className="text-xs text-center truncate w-full">
+                  {attachment.name}
+                </div>
+                <button 
+                  onClick={() => uploadAttachment(attachment)}
+                  className="absolute top-1 right-1 p-1 bg-green-500 rounded-full text-white"
+                  style={{ fontSize: '8px' }}
+                >
+                  <FiDownload size={10} />
+                </button>
+                <button 
+                  onClick={() => removeAttachment(attachment.id)}
+                  className="absolute top-1 left-1 p-1 bg-red-500 rounded-full text-white"
+                  style={{ fontSize: '8px' }}
+                >
+                  <FiX size={10} />
+                </button>
+                {uploadProgress[attachment.id] > 0 && uploadProgress[attachment.id] < 100 && (
+                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-200">
+                    <div 
+                      className="h-full bg-blue-500" 
+                      style={{ width: `${uploadProgress[attachment.id]}%` }}
+                    ></div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -2067,7 +2372,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                          {msg.type === 'text' ? formatMessageText(msg.text) : msg.type === 'image' || msg.type === 'file' ? renderAttachmentInMessage(msg) : null}
+                          {msg.type === 'text' ? formatMessageText(msg.text) : msg.type === 'image' || msg.type === 'file' ? renderEnhancedAttachmentInMessage(msg) : null}
                         </div>
                         <button 
                           onClick={() => setActiveReactionMessage(msg.id)}
@@ -2093,7 +2398,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
           
           {/* Chat Input */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            {renderAttachmentPreviews()}
+            {renderEnhancedAttachmentPreviews()}
             <div className={`relative flex items-center ${isDragging ? 'border-2 border-dashed border-blue-400 p-2 rounded' : ''}`}>
               <button 
                 onClick={() => fileInputRef.current.click()} 
@@ -2175,6 +2480,11 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
       
       {/* Keyboard shortcuts overlay */}
       {renderShortcutsModal()}
+      
+      {/* Image Lightbox */}
+      <AnimatePresence>
+        {lightboxImage && renderLightbox()}
+      </AnimatePresence>
     </div>
   );
 };
