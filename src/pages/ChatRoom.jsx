@@ -138,11 +138,6 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [keysExchanged, setKeysExchanged] = useState({});
   
   // Enhanced audio recording and playback state
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const recordingTimerRef = useRef(null);
   const [recordingQuality, setRecordingQuality] = useState('standard'); // 'low', 'standard', 'high'
   const [playingAudioId, setPlayingAudioId] = useState(null);
   const [audioProgress, setAudioProgress] = useState({});
