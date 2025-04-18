@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -66,6 +66,11 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [idleTimeout, setIdleTimeout] = useState(null);
   const [isIdle, setIsIdle] = useState(false);
   const IDLE_TIME = 5 * 60 * 1000; // 5 minutes
+  const [activeThread, setActiveThread] = useState(null);
+  const [showThreads, setShowThreads] = useState(false);
+  const [threadReplies, setThreadReplies] = useState({});
+  const [threadParentLookup, setThreadParentLookup] = useState({});
+  const threadListRef = useRef(null);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -1331,6 +1336,249 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
 
+  // Handle starting a thread from a message
+  const startThread = (messageId) => {
+    setActiveThread(messageId);
+    
+    // Initialize thread replies if not already present
+    if (!threadReplies[messageId]) {
+      setThreadReplies(prev => ({ ...prev, [messageId]: [] }));
+    }
+    
+    setShowThreads(true);
+    
+    // Scroll to the thread panel when it's opened
+    setTimeout(() => {
+      threadListRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+  
+  // Handle sending a message in a thread
+  const sendThreadReply = (e) => {
+    e.preventDefault();
+    
+    if (!message.trim() || !activeThread) return;
+    
+    // Find parent message
+    const parentMessage = roomMessages.find(msg => msg.id === activeThread);
+    if (!parentMessage) return;
+    
+    // Create new reply
+    const newReply = {
+      id: Date.now(),
+      text: message,
+      timestamp: new Date().toISOString(),
+      userId: 1, // Current user
+      username: 'You',
+      parentId: activeThread
+    };
+    
+    // Add reply to thread
+    setThreadReplies(prev => ({
+      ...prev,
+      [activeThread]: [...(prev[activeThread] || []), newReply]
+    }));
+    
+    // Track message's parent for thread lookup
+    setThreadParentLookup(prev => ({
+      ...prev,
+      [newReply.id]: activeThread
+    }));
+    
+    // Clear input
+    setMessage('');
+    
+    // If this is a simulated environment, update unread reply count for others
+    setRoomMessages(prev => 
+      prev.map(msg => 
+        msg.id === activeThread
+          ? { ...msg, replyCount: (msg.replyCount || 0) + 1, hasUnreadReplies: true }
+          : msg
+      )
+    );
+    
+    // Notify about thread reply (in a real app)
+    // socket.emit('threadReply', { room, parentId: activeThread, reply: newReply });
+  };
+  
+  // Close thread panel
+  const closeThreadPanel = () => {
+    setShowThreads(false);
+    setActiveThread(null);
+  };
+  
+  // Get thread count for a message
+  const getThreadCount = (messageId) => {
+    return (threadReplies[messageId] || []).length;
+  };
+  
+  // Mark thread as read
+  const markThreadAsRead = (messageId) => {
+    setRoomMessages(prev => 
+      prev.map(msg => 
+        msg.id === messageId
+          ? { ...msg, hasUnreadReplies: false }
+          : msg
+      )
+    );
+  };
+  
+  // Find Thread Parent Message
+  const findThreadParentMessage = (messageId) => {
+    return roomMessages.find(msg => msg.id === messageId);
+  };
+  
+  // Get All Thread Messages
+  const getThreadMessages = (messageId) => {
+    return threadReplies[messageId] || [];
+  };
+  
+  // Render thread button on a message
+  const renderThreadButton = (message) => {
+    const replyCount = getThreadCount(message.id);
+    
+    return (
+      <button
+        className="flex items-center text-xs text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 mt-1"
+        onClick={() => startThread(message.id)}
+      >
+        <FiMessageSquare className="mr-1" size={12} />
+        {replyCount > 0 ? (
+          <span className="flex items-center">
+            {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+            {message.hasUnreadReplies && <span className="ml-1 w-2 h-2 bg-blue-500 rounded-full"></span>}
+          </span>
+        ) : (
+          <span>Reply in thread</span>
+        )}
+      </button>
+    );
+  };
+  
+  // Render the thread panel
+  const renderThreadPanel = () => {
+    if (!showThreads || !activeThread) return null;
+    
+    const parentMessage = findThreadParentMessage(activeThread);
+    if (!parentMessage) return null;
+    
+    const threadMessages = getThreadMessages(activeThread);
+    
+    return (
+      <div className="w-80 border-l border-gray-200 dark:border-gray-700 flex flex-col" ref={threadListRef}>
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <h2 className="font-semibold">Thread</h2>
+          <button 
+            className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            onClick={closeThreadPanel}
+          >
+            <FiX size={18} />
+          </button>
+        </div>
+        
+        <div className="p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
+          <div className="flex flex-col">
+            <div className="flex justify-between">
+              <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{parentMessage.username}</span>
+              <span className="text-xs text-gray-400 dark:text-gray-500">
+                {new Date(parentMessage.timestamp).toLocaleTimeString()}
+              </span>
+            </div>
+            <div className="bg-white dark:bg-gray-700 p-2 rounded mt-1 shadow-sm">
+              {formatMessageText(parentMessage.text)}
+            </div>
+          </div>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto p-3">
+          {threadMessages.length === 0 ? (
+            <div className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+              No replies yet. Start the conversation!
+            </div>
+          ) : (
+            threadMessages.map((reply, index) => (
+              <div key={reply.id} className="mb-3">
+                <div className="flex justify-between">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{reply.username}</span>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">
+                    {new Date(reply.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div className="bg-white dark:bg-gray-700 p-2 rounded mt-1 shadow-sm">
+                  {formatMessageText(reply.text)}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        
+        <div className="p-3 border-t border-gray-200 dark:border-gray-700">
+          <form onSubmit={sendThreadReply} className="flex">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Reply to thread..."
+              className="flex-1 p-2 border rounded-l dark:border-gray-600 dark:bg-gray-800"
+            />
+            <button
+              type="submit"
+              disabled={!message.trim()}
+              className={`bg-blue-500 text-white px-4 rounded-r ${!message.trim() ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
+            >
+              Reply
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  };
+  
+  // Initialize some sample thread replies for demo purposes
+  useEffect(() => {
+    if (Object.keys(threadReplies).length === 0 && roomMessages.length > 0) {
+      // Add sample replies to the first message
+      const firstMsgId = roomMessages[0]?.id;
+      if (firstMsgId) {
+        setThreadReplies({
+          [firstMsgId]: [
+            {
+              id: Date.now() - 5000,
+              text: "That's a great point! I completely agree.",
+              timestamp: new Date(Date.now() - 5000).toISOString(),
+              userId: 2,
+              username: 'Bob', 
+              parentId: firstMsgId
+            },
+            {
+              id: Date.now() - 3000,
+              text: "I have some additional thoughts on this topic that might be helpful.",
+              timestamp: new Date(Date.now() - 3000).toISOString(),
+              userId: 3,
+              username: 'Charlie', 
+              parentId: firstMsgId
+            }
+          ]
+        });
+        
+        // Set thread parent lookup
+        setThreadParentLookup({
+          [Date.now() - 5000]: firstMsgId,
+          [Date.now() - 3000]: firstMsgId
+        });
+        
+        // Update message to show it has replies
+        setRoomMessages(prev => 
+          prev.map(msg => 
+            msg.id === firstMsgId
+              ? { ...msg, replyCount: 2, hasUnreadReplies: true }
+              : msg
+          )
+        );
+      }
+    }
+  }, [roomMessages]);
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -1494,9 +1742,15 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
               roomMessages.map((msg, index) => {
                 const isSearchResult = searchResults.includes(msg);
                 const isCurrentResult = searchResults[currentResultIndex]?.id === msg.id;
+                const hasThread = getThreadCount(msg.id) > 0;
+                const isThreadParent = hasThread || msg.replyCount > 0;
                 
-                // Render audio message
-                if (msg.type === 'audio') {
+                // Check if this is a reply to a thread
+                const isThreadReply = !!threadParentLookup[msg.id];
+                const parentId = threadParentLookup[msg.id];
+                
+                // If it's a thread reply and not in thread view, show it differently
+                if (isThreadReply && !isThreadParent && activeThread !== parentId) {
                   return (
                     <motion.div
                       key={msg.id || index}
@@ -1509,21 +1763,19 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                       ref={el => messageRefs.current[msg.id] = el}
                     >
                       <div className="flex flex-col">
-                        <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
-                        <div className="flex items-start">
-                          <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                            <div className="mt-1">
-                              <audio controls src={msg.audio} className="max-w-full" />
-                            </div>
-                          </div>
+                        <div className="flex items-center text-xs text-gray-500 mb-1">
+                          <FiCornerDownRight className="mr-1" size={12} />
+                          <span>Replied to a thread • </span>
                           <button 
-                            onClick={() => setActiveReactionMessage(msg.id)}
-                            className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                            className="ml-1 text-blue-500 hover:underline"
+                            onClick={() => {
+                              startThread(parentId);
+                              markThreadAsRead(parentId);
+                            }}
                           >
-                            😊
+                            View thread
                           </button>
                         </div>
-                        {renderReactions(msg.id)}
                       </div>
                     </motion.div>
                   );
@@ -1554,6 +1806,9 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                         </button>
                       </div>
                       {renderReactions(msg.id)}
+                      
+                      {/* Add thread button */}
+                      {renderThreadButton(msg)}
                     </div>
                   </motion.div>
                 );
@@ -1626,6 +1881,9 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
         
         {/* Enhanced Users Sidebar */}
         {renderEnhancedUsersList()}
+        
+        {/* Thread Panel */}
+        {renderThreadPanel()}
       </div>
       
       {/* Status Modal */}
