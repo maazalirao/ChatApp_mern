@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -118,6 +118,17 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   ]);
   const [bookmarkCategory, setBookmarkCategory] = useState(1);
   const [showAddBookmarkModal, setShowAddBookmarkModal] = useState(false);
+  const [showFormatting, setShowFormatting] = useState(false);
+  const [messageSelection, setMessageSelection] = useState({ start: 0, end: 0 });
+  const [messageFormat, setMessageFormat] = useState({
+    bold: false,
+    italic: false,
+    code: false,
+    link: false,
+  });
+  const [showLinkModal, setShowLinkModal] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  const [linkText, setLinkText] = useState('');
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -3205,6 +3216,375 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
   
+  // Track the current text selection in the message input
+  const handleMessageSelect = () => {
+    const input = document.getElementById('message-input');
+    if (!input) return;
+    
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    
+    // Only update if there's an actual selection
+    if (start !== end) {
+      setMessageSelection({ start, end });
+      const selectedText = message.substring(start, end);
+      
+      // Detect formats in selection
+      setMessageFormat({
+        bold: /^\*\*.*\*\*$/.test(selectedText),
+        italic: /^_.*_$/.test(selectedText),
+        code: /^`.*`$/.test(selectedText),
+        link: /^\[.*\]\(.*\)$/.test(selectedText),
+      });
+    }
+  };
+  
+  // Track input focus to show/hide formatting toolbar
+  const handleMessageFocus = () => {
+    setShowFormatting(true);
+  };
+  
+  // Apply rich text formatting to the message
+  const applyRichFormat = (formatType) => {
+    const input = document.getElementById('message-input');
+    if (!input) return;
+    
+    const start = input.selectionStart;
+    const end = input.selectionEnd;
+    const selectedText = message.substring(start, end);
+    
+    let formattedText = '';
+    let newStart = start;
+    let newEnd = end;
+    
+    switch (formatType) {
+      case 'bold':
+        if (messageFormat.bold) {
+          // Remove bold formatting
+          formattedText = selectedText.substring(2, selectedText.length - 2);
+          newStart = start;
+          newEnd = end - 4;
+        } else {
+          // Add bold formatting
+          formattedText = `**${selectedText}**`;
+          newStart = start;
+          newEnd = end + 4;
+        }
+        break;
+      
+      case 'italic':
+        if (messageFormat.italic) {
+          // Remove italic formatting
+          formattedText = selectedText.substring(1, selectedText.length - 1);
+          newStart = start;
+          newEnd = end - 2;
+        } else {
+          // Add italic formatting
+          formattedText = `_${selectedText}_`;
+          newStart = start;
+          newEnd = end + 2;
+        }
+        break;
+      
+      case 'code':
+        if (messageFormat.code) {
+          // Remove code formatting
+          formattedText = selectedText.substring(1, selectedText.length - 1);
+          newStart = start;
+          newEnd = end - 2;
+        } else {
+          // Add code formatting
+          formattedText = `\`${selectedText}\``;
+          newStart = start;
+          newEnd = end + 2;
+        }
+        break;
+      
+      case 'codeblock':
+        // Always add code block (no removal logic for simplicity)
+        formattedText = `\`\`\`\n${selectedText}\n\`\`\``;
+        newStart = start;
+        newEnd = end + 8;
+        break;
+      
+      case 'link':
+        // Show link modal
+        setLinkText(selectedText);
+        setLinkUrl('');
+        setShowLinkModal(true);
+        return;
+      
+      case 'quote':
+        // Add quote formatting
+        const lines = selectedText.split('\n');
+        formattedText = lines.map(line => `> ${line}`).join('\n');
+        newStart = start;
+        newEnd = end + (2 * lines.length); // '> ' adds 2 chars per line
+        break;
+      
+      case 'list':
+        // Add list formatting
+        const listLines = selectedText.split('\n');
+        formattedText = listLines.map((line, i) => `${i + 1}. ${line}`).join('\n');
+        newStart = start;
+        newEnd = end + listLines.reduce((sum, _, i) => sum + String(i + 1).length + 2, 0);
+        break;
+      
+      case 'bullet':
+        // Add bullet list formatting
+        const bulletLines = selectedText.split('\n');
+        formattedText = bulletLines.map(line => `• ${line}`).join('\n');
+        newStart = start;
+        newEnd = end + (2 * bulletLines.length); // '• ' adds 2 chars per line
+        break;
+      
+      default:
+        return;
+    }
+    
+    // Update the message with the formatted text
+    const newMessage = message.substring(0, start) + formattedText + message.substring(end);
+    setMessage(newMessage);
+    
+    // Update message format state
+    setMessageFormat(prev => ({
+      ...prev,
+      [formatType]: !prev[formatType]
+    }));
+    
+    // Focus back on input after formatting with the proper selection
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(newStart, newEnd);
+    }, 0);
+  };
+  
+  // Insert link into the message
+  const insertLink = () => {
+    if (!linkUrl.trim()) {
+      showNotification('Please enter a URL', 'warning');
+      return;
+    }
+    
+    const input = document.getElementById('message-input');
+    if (!input) return;
+    
+    const { start, end } = messageSelection;
+    const linkMarkdown = `[${linkText || linkUrl}](${linkUrl})`;
+    
+    // Replace the selected text with the link
+    const newMessage = message.substring(0, start) + linkMarkdown + message.substring(end);
+    setMessage(newMessage);
+    
+    // Close the link modal
+    setShowLinkModal(false);
+    
+    // Focus back on input
+    setTimeout(() => {
+      input.focus();
+      input.setSelectionRange(start + linkMarkdown.length, start + linkMarkdown.length);
+    }, 0);
+  };
+  
+  // Render link modal
+  const renderLinkModal = () => {
+    if (!showLinkModal) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-80 max-w-full">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Insert Link</h2>
+            <button
+              onClick={() => setShowLinkModal(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Link Text
+              </label>
+              <input
+                type="text"
+                value={linkText}
+                onChange={(e) => setLinkText(e.target.value)}
+                placeholder="Display text"
+                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                URL
+              </label>
+              <input
+                type="text"
+                value={linkUrl}
+                onChange={(e) => setLinkUrl(e.target.value)}
+                placeholder="https://"
+                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+              />
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-3 mt-4">
+            <button
+              className="px-4 py-2 text-sm border rounded"
+              onClick={() => setShowLinkModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded"
+              onClick={insertLink}
+            >
+              Insert
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Render formatting toolbar
+  const renderFormattingToolbar = () => {
+    if (!showFormatting) return null;
+    
+    const hasSelection = messageSelection.start !== messageSelection.end;
+    
+    return (
+      <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-md border border-gray-200 dark:border-gray-600 space-x-1 overflow-x-auto">
+        <button
+          onClick={() => applyRichFormat('bold')}
+          className={`p-1.5 rounded ${messageFormat.bold ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-600'} ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Bold (Ctrl+B)"
+        >
+          <FiBold size={16} />
+        </button>
+        
+        <button
+          onClick={() => applyRichFormat('italic')}
+          className={`p-1.5 rounded ${messageFormat.italic ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-600'} ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Italic (Ctrl+I)"
+        >
+          <FiItalic size={16} />
+        </button>
+        
+        <button
+          onClick={() => applyRichFormat('code')}
+          className={`p-1.5 rounded ${messageFormat.code ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-600'} ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Inline Code"
+        >
+          <FiCode size={16} />
+        </button>
+        
+        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 my-auto mx-1"></div>
+        
+        <button
+          onClick={() => applyRichFormat('link')}
+          className={`p-1.5 rounded ${messageFormat.link ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-gray-200 dark:hover:bg-gray-600'} ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Insert Link"
+        >
+          <FiLink size={16} />
+        </button>
+        
+        <button
+          onClick={() => applyRichFormat('quote')}
+          className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Quote"
+        >
+          <FiAlignLeft size={16} />
+        </button>
+        
+        <button
+          onClick={() => applyRichFormat('codeblock')}
+          className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Code Block"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clipRule="evenodd" />
+          </svg>
+        </button>
+        
+        <div className="w-px h-6 bg-gray-300 dark:bg-gray-600 my-auto mx-1"></div>
+        
+        <button
+          onClick={() => applyRichFormat('list')}
+          className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Numbered List"
+        >
+          <FiList size={16} />
+        </button>
+        
+        <button
+          onClick={() => applyRichFormat('bullet')}
+          className={`p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-600 ${!hasSelection && 'opacity-50 cursor-not-allowed'}`}
+          disabled={!hasSelection}
+          title="Bullet List"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+          </svg>
+        </button>
+      </div>
+    );
+  };
+  
+  // Enhanced message format function with additional markdown support
+  const enhancedFormatMessageText = (text) => {
+    if (!text) return null;
+    
+    // 1. Code blocks with syntax highlighting (simulated)
+    let formattedText = text.replace(/```([\s\S]*?)```/g, (match, codeContent) => {
+      const language = codeContent.split('\n')[0].trim();
+      const code = language ? codeContent.substring(language.length).trim() : codeContent;
+      
+      const languageClass = language ? ` language-${language}` : '';
+      
+      return `<pre class="bg-gray-800 text-gray-200 p-2 rounded my-2 overflow-x-auto${languageClass}">${code}</pre>`;
+    });
+    
+    // 2. Inline code
+    formattedText = formattedText.replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$1</code>');
+    
+    // 3. Bold
+    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // 4. Italic
+    formattedText = formattedText.replace(/_(.*?)_/g, '<em>$1</em>');
+    
+    // 5. Links with improved styling
+    formattedText = formattedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline flex items-center"><span>$1</span><svg class="inline-block ml-1 h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg></a>');
+    
+    // 6. Auto-detect URLs not in markdown format
+    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
+    formattedText = formattedText.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
+    
+    // 7. Blockquotes
+    formattedText = formattedText.replace(/^>\s(.*?)$/gm, '<blockquote class="border-l-4 border-gray-300 dark:border-gray-600 pl-2 text-gray-600 dark:text-gray-400 italic my-2">$1</blockquote>');
+    
+    // 8. Numbered lists
+    formattedText = formattedText.replace(/^(\d+)\.\s(.*)$/gm, (match, number, item) => {
+      return `<div class="flex"><span class="mr-2">${number}.</span><span>${item}</span></div>`;
+    });
+    
+    // 9. Bullet lists
+    formattedText = formattedText.replace(/^[•]\s(.*)$/gm, '<div class="flex"><span class="mr-2">•</span><span>$1</span></div>');
+    
+    return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -3471,7 +3851,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                          {formatMessageText(msg.text)}
+                          {enhancedFormatMessageText(msg.text)}
                         </div>
                         <div className="flex items-center ml-2">
                           <button 
@@ -3502,8 +3882,16 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
           
           {/* Chat Input */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-            {renderEnhancedAttachmentPreviews()}
-            <div className={`relative flex items-center ${isDragging ? 'border-2 border-dashed border-blue-400 p-2 rounded' : ''}`}>
+            {renderAttachmentPreviews()}
+            
+            {/* Formatting Toolbar */}
+            {renderFormattingToolbar()}
+            
+            <div className={`relative flex items-center mt-2 ${isDragging ? 'border-2 border-dashed border-blue-400 p-2 rounded' : ''}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+            >
               <button 
                 onClick={() => fileInputRef.current.click()} 
                 className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
@@ -3530,18 +3918,15 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                     handleTyping();
                   }
                 }}
+                onSelect={handleMessageSelect}
+                onFocus={handleMessageFocus}
+                onBlur={() => {
+                  // Don't hide immediately to allow clicking formatting buttons
+                  setTimeout(() => setShowFormatting(false), 200);
+                }}
                 placeholder="Type a message... (Ctrl+. to focus)"
                 className="flex-1 p-2 border dark:border-gray-600 dark:bg-gray-800 rounded-l"
               />
-              
-              {/* Voice recording button */}
-              <button
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`p-2 rounded-full ${isRecording ? 'bg-red-500 text-white' : 'text-gray-500 hover:text-blue-500'}`}
-                title={isRecording ? "Stop recording" : "Record voice message"}
-              >
-                <FaMicrophone />
-              </button>
               
               {/* Schedule button */}
               <button
@@ -3553,21 +3938,38 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
               </button>
               
               <button
-                onClick={showFileUpload ? sendMessageWithFiles : handleSendMessage}
-                disabled={(!showFileUpload && message.trim() === '') || isLoading}
-                className={`bg-blue-500 text-white p-2 rounded-full ${(!showFileUpload && message.trim() === '') || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
+                onClick={handleSendMessage}
+                disabled={(!message.trim() && attachments.length === 0) || isLoading}
+                className={`bg-blue-500 text-white p-2 rounded-r ${(!message.trim() && attachments.length === 0) || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
               >
                 <FaPaperPlane />
               </button>
             </div>
-            {isDragging && (
-              <div className="absolute inset-0 bg-blue-100 bg-opacity-50 z-10 flex items-center justify-center">
-                <div className="p-4 bg-white rounded-lg shadow-lg">
-                  <p className="text-lg font-semibold">Drop files to upload</p>
-                </div>
-              </div>
-            )}
+            
+            {/* Character count */}
+            <div className="flex justify-end mt-1">
+              <span 
+                className={`text-xs ${
+                  message.length > 400 ? 'text-orange-500 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'
+                }`}
+              >
+                {message.length}/500
+              </span>
+            </div>
           </div>
+          
+          {/* Link Modal */}
+          <AnimatePresence>
+            {showLinkModal && renderLinkModal()}
+          </AnimatePresence>
+          
+          {isDragging && (
+            <div className="absolute inset-0 bg-blue-100 bg-opacity-50 z-10 flex items-center justify-center">
+              <div className="p-4 bg-white rounded-lg shadow-lg">
+                <p className="text-lg font-semibold">Drop files to upload</p>
+              </div>
+            </div>
+          )}
         </div>
         
         {/* Enhanced Users Sidebar */}
