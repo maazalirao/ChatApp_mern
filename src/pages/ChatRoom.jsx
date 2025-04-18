@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -87,6 +87,24 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [showScheduledMessages, setShowScheduledMessages] = useState(false);
   const [readReceipts, setReadReceipts] = useState({});
   const [showReadReceipts, setShowReadReceipts] = useState(true);
+  const [translations, setTranslations] = useState({});
+  const [userLanguage, setUserLanguage] = useState('en');
+  const [autoTranslate, setAutoTranslate] = useState(false);
+  const [translating, setTranslating] = useState(false);
+  const [supportedLanguages, setSupportedLanguages] = useState([
+    { code: 'en', name: 'English' },
+    { code: 'es', name: 'Spanish' },
+    { code: 'fr', name: 'French' },
+    { code: 'de', name: 'German' },
+    { code: 'it', name: 'Italian' },
+    { code: 'pt', name: 'Portuguese' },
+    { code: 'ja', name: 'Japanese' },
+    { code: 'ko', name: 'Korean' },
+    { code: 'zh', name: 'Chinese' },
+    { code: 'ru', name: 'Russian' },
+    { code: 'ar', name: 'Arabic' },
+  ]);
+  const [showLanguageSettings, setShowLanguageSettings] = useState(false);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -2607,6 +2625,300 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     </div>
   );
   
+  // Detect foreign language messages that need translation
+  const detectLanguage = async (text) => {
+    // This is a simplified mock language detection
+    // In a real app, you'd use a service like Google Cloud Translation API
+    
+    // Check for common words in different languages to simulate detection
+    const spanishWords = ['hola', 'gracias', 'buenos', 'días', 'cómo', 'estás'];
+    const frenchWords = ['bonjour', 'merci', 'comment', 'ça', 'va', 'salut'];
+    const germanWords = ['hallo', 'danke', 'guten', 'tag', 'wie', 'gehts'];
+    
+    const words = text.toLowerCase().split(/\s+/);
+    
+    let detectedLanguage = 'en'; // Default to English
+    
+    // Check for Spanish
+    if (words.some(word => spanishWords.includes(word))) {
+      detectedLanguage = 'es';
+    }
+    // Check for French
+    else if (words.some(word => frenchWords.includes(word))) {
+      detectedLanguage = 'fr';
+    }
+    // Check for German
+    else if (words.some(word => germanWords.includes(word))) {
+      detectedLanguage = 'de';
+    }
+    
+    return detectedLanguage;
+  };
+  
+  // Translate a message
+  const translateMessage = async (messageId, targetLanguage = userLanguage) => {
+    setTranslating(true);
+    
+    try {
+      const message = roomMessages.find(msg => msg.id === messageId);
+      if (!message) return;
+      
+      // Skip if already translated to this language
+      if (translations[messageId]?.language === targetLanguage) {
+        setTranslating(false);
+        return;
+      }
+      
+      // Detect source language if not already known
+      const sourceLanguage = translations[messageId]?.sourceLanguage || await detectLanguage(message.text);
+      
+      // Skip translation if the source language is the same as target
+      if (sourceLanguage === targetLanguage) {
+        setTranslations(prev => ({
+          ...prev,
+          [messageId]: {
+            original: message.text,
+            translated: null,
+            sourceLanguage,
+            language: targetLanguage,
+            needsTranslation: false
+          }
+        }));
+        
+        setTranslating(false);
+        return;
+      }
+      
+      // In a real app, you'd call a translation service here
+      // Mock translation for demo purposes
+      const mockTranslations = {
+        'es': {
+          'Hello everyone!': '¡Hola a todos!',
+          "Hi Alice, how are you doing today?": "Hola Alice, ¿cómo estás hoy?",
+          "I'm doing great, thanks for asking!": "Estoy muy bien, ¡gracias por preguntar!",
+          "Welcome to our chat room": "Bienvenido a nuestra sala de chat",
+          "Has anyone seen the latest product update?": "¿Alguien ha visto la última actualización del producto?"
+        },
+        'fr': {
+          'Hello everyone!': 'Bonjour à tous!',
+          "Hi Alice, how are you doing today?": "Salut Alice, comment vas-tu aujourd'hui ?",
+          "I'm doing great, thanks for asking!": "Je vais très bien, merci de demander !",
+          "Welcome to our chat room": "Bienvenue dans notre salon de discussion",
+          "Has anyone seen the latest product update?": "Quelqu'un a-t-il vu la dernière mise à jour du produit ?"
+        },
+        'de': {
+          'Hello everyone!': 'Hallo zusammen!',
+          "Hi Alice, how are you doing today?": "Hallo Alice, wie geht es dir heute?",
+          "I'm doing great, thanks for asking!": "Mir geht es gut, danke der Nachfrage!",
+          "Welcome to our chat room": "Willkommen in unserem Chatroom",
+          "Has anyone seen the latest product update?": "Hat jemand das neueste Produkt-Update gesehen?"
+        }
+      };
+      
+      // Get the translation or generate placeholder
+      let translatedText = null;
+      
+      if (mockTranslations[targetLanguage] && mockTranslations[targetLanguage][message.text]) {
+        translatedText = mockTranslations[targetLanguage][message.text];
+      } else {
+        // Generate a placeholder translation for demo purposes
+        translatedText = `[${getLanguageName(targetLanguage)} translation: ${message.text}]`;
+      }
+      
+      // Update translations state
+      setTranslations(prev => ({
+        ...prev,
+        [messageId]: {
+          original: message.text,
+          translated: translatedText,
+          sourceLanguage,
+          language: targetLanguage,
+          needsTranslation: true
+        }
+      }));
+      
+      // Mock network delay
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      console.error('Translation error:', error);
+      showNotification('Translation failed', 'error');
+    } finally {
+      setTranslating(false);
+    }
+  };
+  
+  // Auto-translate new messages if enabled
+  useEffect(() => {
+    if (!autoTranslate) return;
+    
+    // Get the latest message
+    const latestMessage = roomMessages[roomMessages.length - 1];
+    if (!latestMessage) return;
+    
+    // Skip user's own messages
+    if (latestMessage.userId === 1) return;
+    
+    // Check if already has translation
+    if (translations[latestMessage.id]) return;
+    
+    // Translate the message
+    translateMessage(latestMessage.id);
+  }, [roomMessages, autoTranslate]);
+  
+  // Get language name from code
+  const getLanguageName = (languageCode) => {
+    const language = supportedLanguages.find(lang => lang.code === languageCode);
+    return language ? language.name : languageCode.toUpperCase();
+  };
+  
+  // Toggle auto-translation
+  const toggleAutoTranslate = () => {
+    setAutoTranslate(prev => !prev);
+    showNotification(
+      autoTranslate ? 'Auto-translation disabled' : 'Auto-translation enabled',
+      'info'
+    );
+  };
+  
+  // Render translation UI for a message
+  const renderTranslationUI = (messageId) => {
+    const message = roomMessages.find(msg => msg.id === messageId);
+    if (!message) return null;
+    
+    const translation = translations[messageId];
+    
+    // If we don't have translation info yet, show translate button
+    if (!translation) {
+      return (
+        <button
+          onClick={() => translateMessage(messageId)}
+          className="flex items-center text-xs text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 mt-1"
+          disabled={translating}
+        >
+          <FiGlobe className="mr-1" size={12} />
+          <span>{translating ? 'Translating...' : 'Translate'}</span>
+        </button>
+      );
+    }
+    
+    // If no translation needed, show language indicator
+    if (!translation.needsTranslation) {
+      return (
+        <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mt-1">
+          <FiGlobe className="mr-1" size={12} />
+          <span>Original: {getLanguageName(translation.sourceLanguage)}</span>
+        </div>
+      );
+    }
+    
+    // Show translated text with toggle
+    return (
+      <div className="mt-1">
+        <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-1">
+          <FiGlobe className="mr-1" size={12} />
+          <span>
+            Translated from {getLanguageName(translation.sourceLanguage)} to {getLanguageName(translation.language)}
+          </span>
+          <button
+            onClick={() => {
+              setTranslations(prev => ({
+                ...prev,
+                [messageId]: {
+                  ...prev[messageId],
+                  showOriginal: !prev[messageId].showOriginal
+                }
+              }));
+            }}
+            className="ml-2 text-blue-500 hover:underline"
+          >
+            {translation.showOriginal ? 'Show translation' : 'Show original'}
+          </button>
+        </div>
+        {translation.showOriginal ? (
+          <div className="text-sm text-gray-600 dark:text-gray-400 italic">
+            {translation.original}
+          </div>
+        ) : (
+          <div className="text-sm text-blue-600 dark:text-blue-400">
+            {translation.translated}
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  // Render language settings modal
+  const renderLanguageSettings = () => {
+    if (!showLanguageSettings) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-96">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Language Settings</h2>
+            <button
+              onClick={() => setShowLanguageSettings(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Your language</label>
+            <select
+              value={userLanguage}
+              onChange={(e) => setUserLanguage(e.target.value)}
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+            >
+              {supportedLanguages.map(lang => (
+                <option key={lang.code} value={lang.code}>
+                  {lang.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              This is the language messages will be translated to
+            </p>
+          </div>
+          
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-sm text-gray-700 dark:text-gray-300">Auto-translate messages</span>
+            <button
+              onClick={toggleAutoTranslate}
+              className={`relative inline-flex items-center h-6 rounded-full w-11 ${
+                autoTranslate ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+              }`}
+            >
+              <span className="sr-only">Toggle auto-translate</span>
+              <span
+                className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                  autoTranslate ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+          
+          <div className="p-3 bg-blue-50 dark:bg-blue-900 dark:bg-opacity-20 rounded mb-4">
+            <p className="text-sm text-blue-700 dark:text-blue-300">
+              Auto-translation will automatically translate incoming messages to your preferred language.
+            </p>
+          </div>
+          
+          <div className="flex justify-end">
+            <button
+              onClick={() => setShowLanguageSettings(false)}
+              className="px-4 py-2 bg-blue-500 text-white rounded"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -2718,6 +3030,17 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
               <span className="absolute -top-1 -right-1 text-xs bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
                 {scheduledMessages.length}
               </span>
+            )}
+          </button>
+          {/* Language button */}
+          <button
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 relative"
+            onClick={() => setShowLanguageSettings(true)}
+            title="Language Settings"
+          >
+            <FiGlobe size={18} />
+            {autoTranslate && (
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
             )}
           </button>
         </div>
@@ -2860,6 +3183,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                       </div>
                       {renderReactions(msg.id)}
                       {renderReadReceipts(msg.id)}
+                      {renderTranslationUI(msg.id)}
                       
                       {/* Add thread button */}
                       {renderThreadButton(msg)}
@@ -2988,6 +3312,10 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
           
         {renderReadReceiptSetting()}
       </div>
+      {/* Language Settings Modal */}
+      <AnimatePresence>
+        {showLanguageSettings && renderLanguageSettings()}
+      </AnimatePresence>
     </div>
   );
 };
