@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -105,6 +105,19 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     { code: 'ar', name: 'Arabic' },
   ]);
   const [showLanguageSettings, setShowLanguageSettings] = useState(false);
+  const [bookmarks, setBookmarks] = useState([]);
+  const [showBookmarks, setShowBookmarks] = useState(false);
+  const [activeBookmark, setActiveBookmark] = useState(null);
+  const [bookmarkNote, setBookmarkNote] = useState('');
+  const [bookmarkCategories, setBookmarkCategories] = useState([
+    { id: 1, name: 'Important', color: 'red' },
+    { id: 2, name: 'Todo', color: 'green' },
+    { id: 3, name: 'Question', color: 'blue' },
+    { id: 4, name: 'Idea', color: 'purple' },
+    { id: 5, name: 'Follow-up', color: 'orange' }
+  ]);
+  const [bookmarkCategory, setBookmarkCategory] = useState(1);
+  const [showAddBookmarkModal, setShowAddBookmarkModal] = useState(false);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -2919,6 +2932,279 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
   
+  // Bookmark a message
+  const bookmarkMessage = (messageId) => {
+    const message = roomMessages.find(msg => msg.id === messageId);
+    if (!message) return;
+    
+    // Check if already bookmarked
+    if (bookmarks.some(bookmark => bookmark.messageId === messageId)) {
+      showNotification('Message already bookmarked', 'info');
+      return;
+    }
+    
+    // Set as active bookmark to add notes, etc.
+    setActiveBookmark(messageId);
+    setBookmarkNote('');
+    setBookmarkCategory(1); // Default to 'Important'
+    setShowAddBookmarkModal(true);
+  };
+  
+  // Save the bookmark with notes and category
+  const saveBookmark = () => {
+    if (!activeBookmark) return;
+    
+    const message = roomMessages.find(msg => msg.id === activeBookmark);
+    if (!message) return;
+    
+    const category = bookmarkCategories.find(cat => cat.id === bookmarkCategory);
+    
+    const newBookmark = {
+      id: Date.now(),
+      messageId: activeBookmark,
+      message: message.text,
+      username: message.username,
+      timestamp: message.timestamp,
+      note: bookmarkNote,
+      category: category,
+      createdAt: new Date().toISOString()
+    };
+    
+    setBookmarks(prev => [...prev, newBookmark]);
+    setShowAddBookmarkModal(false);
+    setActiveBookmark(null);
+    
+    showNotification('Message bookmarked', 'success');
+  };
+  
+  // Edit a bookmark's note or category
+  const editBookmark = (bookmarkId) => {
+    const bookmark = bookmarks.find(b => b.id === bookmarkId);
+    if (!bookmark) return;
+    
+    setActiveBookmark(bookmark.messageId);
+    setBookmarkNote(bookmark.note);
+    setBookmarkCategory(bookmark.category.id);
+    setShowAddBookmarkModal(true);
+    
+    // Remove the old bookmark (will be replaced with updated one)
+    setBookmarks(prev => prev.filter(b => b.id !== bookmarkId));
+  };
+  
+  // Remove a bookmark
+  const removeBookmark = (bookmarkId) => {
+    setBookmarks(prev => prev.filter(b => b.id !== bookmarkId));
+    showNotification('Bookmark removed', 'info');
+  };
+  
+  // Scroll to a bookmarked message
+  const goToBookmarkedMessage = (messageId) => {
+    scrollToMessage(messageId);
+    setShowBookmarks(false);
+  };
+  
+  // Add a bookmark button to messages
+  const renderBookmarkButton = (messageId) => {
+    const isBookmarked = bookmarks.some(b => b.messageId === messageId);
+    
+    return (
+      <button
+        onClick={() => bookmarkMessage(messageId)}
+        className={`flex items-center text-xs ${
+          isBookmarked 
+            ? 'text-yellow-500 dark:text-yellow-400' 
+            : 'text-gray-500 dark:text-gray-400 hover:text-yellow-500 dark:hover:text-yellow-400'
+        } mt-1 ml-2`}
+        title={isBookmarked ? 'Already bookmarked' : 'Bookmark this message'}
+      >
+        <FiBookmark className="mr-1" size={12} />
+      </button>
+    );
+  };
+  
+  // Render add/edit bookmark modal
+  const renderAddBookmarkModal = () => {
+    if (!showAddBookmarkModal || !activeBookmark) return null;
+    
+    const message = roomMessages.find(msg => msg.id === activeBookmark);
+    if (!message) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-[500px] max-w-full">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Bookmark Message</h2>
+            <button
+              onClick={() => setShowAddBookmarkModal(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="mb-4 bg-gray-100 dark:bg-gray-700 p-3 rounded">
+            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+              <span>{message.username}</span>
+              <span>{new Date(message.timestamp).toLocaleString()}</span>
+            </div>
+            <p className="text-gray-800 dark:text-gray-200">{message.text}</p>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Category
+            </label>
+            <div className="flex flex-wrap gap-2">
+              {bookmarkCategories.map(category => (
+                <button
+                  key={category.id}
+                  onClick={() => setBookmarkCategory(category.id)}
+                  className={`px-3 py-1 rounded-full text-sm flex items-center ${
+                    bookmarkCategory === category.id
+                      ? `bg-${category.color}-500 text-white`
+                      : `bg-${category.color}-100 text-${category.color}-700 dark:bg-${category.color}-900 dark:bg-opacity-30 dark:text-${category.color}-300`
+                  }`}
+                >
+                  <FiTag className="mr-1" size={12} />
+                  {category.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Add a note (optional)
+            </label>
+            <textarea
+              value={bookmarkNote}
+              onChange={(e) => setBookmarkNote(e.target.value)}
+              placeholder="Why is this message important?"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 min-h-[80px]"
+            />
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            <button
+              className="px-4 py-2 text-sm border rounded"
+              onClick={() => setShowAddBookmarkModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded"
+              onClick={saveBookmark}
+            >
+              Save Bookmark
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Render bookmarks panel
+  const renderBookmarksPanel = () => {
+    if (!showBookmarks) return null;
+    
+    // Group bookmarks by category
+    const groupedBookmarks = bookmarks.reduce((acc, bookmark) => {
+      const categoryId = bookmark.category.id;
+      if (!acc[categoryId]) {
+        acc[categoryId] = [];
+      }
+      acc[categoryId].push(bookmark);
+      return acc;
+    }, {});
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-xl w-full max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Your Bookmarks</h2>
+            <button
+              onClick={() => setShowBookmarks(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          {bookmarks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-10 text-gray-500">
+              <FiBookmark size={40} className="mb-3" />
+              <p>You haven't bookmarked any messages yet</p>
+              <p className="text-sm mt-2">Bookmark important messages to find them later</p>
+            </div>
+          ) : (
+            <div className="flex-1 overflow-y-auto pr-2">
+              {bookmarkCategories.map(category => {
+                const categoryBookmarks = groupedBookmarks[category.id] || [];
+                if (categoryBookmarks.length === 0) return null;
+                
+                return (
+                  <div key={category.id} className="mb-4">
+                    <h3 className={`text-sm font-medium text-${category.color}-600 dark:text-${category.color}-400 mb-2 flex items-center`}>
+                      <FiTag className="mr-1" size={12} />
+                      {category.name} ({categoryBookmarks.length})
+                    </h3>
+                    
+                    <div className="space-y-2">
+                      {categoryBookmarks.map(bookmark => (
+                        <div 
+                          key={bookmark.id} 
+                          className={`p-3 rounded border-l-4 border-${category.color}-500 bg-gray-50 dark:bg-gray-700`}
+                        >
+                          <div className="flex justify-between items-start mb-1">
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {bookmark.username}
+                            </span>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
+                                {new Date(bookmark.timestamp).toLocaleString()}
+                              </span>
+                              <button
+                                onClick={() => editBookmark(bookmark.id)}
+                                className="text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
+                                title="Edit bookmark"
+                              >
+                                <FiEdit size={14} />
+                              </button>
+                              <button
+                                onClick={() => removeBookmark(bookmark.id)}
+                                className="text-gray-400 hover:text-red-500 dark:hover:text-red-400"
+                                title="Remove bookmark"
+                              >
+                                <FiX size={14} />
+                              </button>
+                            </div>
+                          </div>
+                          
+                          <p 
+                            className="text-gray-800 dark:text-gray-200 cursor-pointer hover:underline"
+                            onClick={() => goToBookmarkedMessage(bookmark.messageId)}
+                          >
+                            {bookmark.message}
+                          </p>
+                          
+                          {bookmark.note && (
+                            <div className="mt-2 text-sm italic text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-600 p-2 rounded">
+                              {bookmark.note}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -3041,6 +3327,19 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
             <FiGlobe size={18} />
             {autoTranslate && (
               <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+            )}
+          </button>
+          {/* Bookmarks button */}
+          <button
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 relative"
+            onClick={() => setShowBookmarks(true)}
+            title="Your Bookmarks"
+          >
+            <FiBookmark size={18} />
+            {bookmarks.length > 0 && (
+              <span className="absolute -top-1 -right-1 text-xs bg-yellow-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                {bookmarks.length}
+              </span>
             )}
           </button>
         </div>
@@ -3174,12 +3473,15 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
                           {formatMessageText(msg.text)}
                         </div>
-                        <button 
-                          onClick={() => setActiveReactionMessage(msg.id)}
-                          className="ml-2 opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                        >
-                          😊
-                        </button>
+                        <div className="flex items-center ml-2">
+                          <button 
+                            onClick={() => setActiveReactionMessage(msg.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                          >
+                            😊
+                          </button>
+                          {renderBookmarkButton(msg.id)}
+                        </div>
                       </div>
                       {renderReactions(msg.id)}
                       {renderReadReceipts(msg.id)}
@@ -3315,6 +3617,11 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
       {/* Language Settings Modal */}
       <AnimatePresence>
         {showLanguageSettings && renderLanguageSettings()}
+      </AnimatePresence>
+      {/* Bookmarks Modal */}
+      <AnimatePresence>
+        {showBookmarks && renderBookmarksPanel()}
+        {showAddBookmarkModal && renderAddBookmarkModal()}
       </AnimatePresence>
     </div>
   );
