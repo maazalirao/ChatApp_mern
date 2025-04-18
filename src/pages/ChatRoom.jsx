@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight, FiLock, FiKey, FiShield, FiPlayCircle, FiPauseCircle, FiTrash2 } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight, FiLock, FiKey, FiShield, FiPlayCircle, FiPauseCircle, FiTrash2, FiMic, FiMicOff, FiPlay, FiPause, FiTrash } from 'react-icons/fi';
 import { FaMicrophone, FaStop, FaPause, FaPlay, FaVolumeUp } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -4572,6 +4572,238 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
       </div>
     );
   }, [messageReadStatus, users, username]);
+  
+  const getRichReadReceipts = (messageId) => {
+    if (!showReadReceipts || !readReceipts[messageId]) return null;
+    
+    // Sort readers by timestamp (most recent first)
+    const readers = [...readReceipts[messageId]].sort((a, b) => b.timestamp - a.timestamp);
+    
+    if (readers.length === 0) return null;
+    
+    // When message is read by many users, show counts with hover details
+    return (
+      <div className="read-receipts-container">
+        {readers.length <= 3 ? (
+          // Show individual avatars for small groups
+          <div className="flex items-center space-x-1">
+            {readers.map((reader) => (
+              <div 
+                key={reader.userId} 
+                className="read-receipt-avatar"
+                title={`Read by ${reader.username} at ${new Date(reader.timestamp).toLocaleTimeString()}`}
+              >
+                <div className="w-3 h-3 rounded-full bg-green-500 flex items-center justify-center text-[8px] text-white">
+                  {reader.username.charAt(0).toUpperCase()}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          // Show count for larger groups
+          <div 
+            className="read-receipt-count text-xs text-gray-400"
+            title={readers.map(r => `${r.username} at ${new Date(r.timestamp).toLocaleTimeString()}`).join('\n')}
+          >
+            <FiCheck className="inline-block mr-1" size={10} />
+            <span>{readers.length}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Enhanced version of the existing renderMessage function to include rich read receipts
+  const renderMessage = (message, index) => {
+    const isCurrentUser = message.userId === (users.find(u => u.username === username)?.id || 1);
+    const messageContainerClass = isCurrentUser
+      ? "chat-message-container self-end max-w-[85%] md:max-w-[70%]"
+      : "chat-message-container self-start max-w-[85%] md:max-w-[70%]";
+
+    const messageClass = isCurrentUser
+      ? "flex items-start message-bubble bg-blue-600 text-white rounded-tl-2xl rounded-tr-sm rounded-bl-2xl rounded-br-2xl shadow-md"
+      : "flex items-start message-bubble bg-gray-200 dark:bg-gray-700 rounded-tl-sm rounded-tr-2xl rounded-bl-2xl rounded-br-2xl shadow-md";
+
+    // Check if this message is being replied to
+    const isBeingRepliedTo = message.id === replyingTo?.id;
+    
+    return (
+      <div
+        ref={el => (messageRefs.current[message.id] = el)}
+        key={message.id}
+        className={`${messageContainerClass} ${
+          message.highlight ? "highlight-message" : ""
+        } ${isBeingRepliedTo ? "being-replied-to" : ""}`}
+        onClick={() => handleMessageClick(message)}
+      >
+        <motion.div
+          variants={bubbleVariants}
+          whileTap="tap"
+          whileHover="hover"
+          className={messageClass}
+          style={{
+            padding: '0.75rem',
+            position: 'relative'
+          }}
+        >
+          {!isCurrentUser && (
+            <div className="message-username font-semibold text-sm text-gray-800 dark:text-gray-200 mb-1">
+              {message.username}
+            </div>
+          )}
+          
+          {/* Reply indicator */}
+          {message.replyTo && (
+            <div className="reply-indicator p-2 rounded bg-gray-100 dark:bg-gray-600 mb-2 text-sm">
+              <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 mb-1">
+                <FiCornerDownRight className="mr-1" />
+                <span>Replying to {message.replyToUser}</span>
+              </div>
+              <div className="truncate">{message.replyToText}</div>
+            </div>
+          )}
+          
+          {/* Message content based on type */}
+          {message.type === 'audio' ? (
+            renderAudioMessage(message)
+          ) : message.type === 'image' || message.type === 'video' || message.type === 'file' ? (
+            renderAttachmentInMessage(message)
+          ) : (
+            <div className="message-text">
+              {enhancedFormatMessageText(message.text)}
+            </div>
+          )}
+          
+          {/* Display reactions */}
+          {renderReactions(message.id)}
+          
+          {/* Translation UI */}
+          {message.text && renderTranslationUI(message.id)}
+          
+          {/* Thread indicator */}
+          {getThreadCount(message.id) > 0 && renderThreadButton(message)}
+          
+          {/* Time and read receipts */}
+          <div className="flex items-center justify-end mt-1 space-x-2">
+            <div className="message-time text-xs opacity-70">
+              {new Date(message.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+            
+            {/* Enhanced read receipts */}
+            {isCurrentUser && getRichReadReceipts(message.id)}
+          </div>
+          
+          {/* Decoration element for chat bubble */}
+          <div 
+            className={`message-decoration absolute w-3 h-3 ${
+              isCurrentUser ? 'right-0 bg-blue-600' : 'left-0 bg-gray-200 dark:bg-gray-700'
+            }`}
+            style={{
+              top: 0,
+              [isCurrentUser ? 'right' : 'left']: -6,
+              clipPath: isCurrentUser 
+                ? 'polygon(0 0, 100% 0, 100% 100%)' 
+                : 'polygon(0 0, 100% 0, 0 100%)'
+            }}
+          />
+        </motion.div>
+      </div>
+    );
+  };
+
+  // Actively track messages that are visible on screen
+  const trackMessageVisibility = () => {
+    if (!messagesContainerRef.current) return;
+    
+    const options = {
+      root: messagesContainerRef.current,
+      rootMargin: '0px',
+      threshold: 0.5 // Element is considered visible when 50% is in view
+    };
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const messageId = entry.target.dataset.messageId;
+          if (messageId) {
+            // Don't mark your own messages as read
+            const message = roomMessages.find(m => m.id === messageId);
+            if (message && message.username !== username) {
+              markMessageAsRead(messageId);
+            }
+          }
+        }
+      });
+    }, options);
+    
+    // Observe all messages except user's own
+    Object.entries(messageRefs.current).forEach(([messageId, element]) => {
+      if (element) {
+        const message = roomMessages.find(m => m.id === messageId);
+        if (message && message.username !== username) {
+          element.dataset.messageId = messageId;
+          observer.observe(element);
+        }
+      }
+    });
+    
+    return () => observer.disconnect();
+  };
+
+  // Updated function to mark a message as read
+  const markMessageAsRead = (messageId) => {
+    // Check if we've already sent a read receipt for this message
+    const existingReceipt = readReceipts[messageId]?.find(r => r.username === username);
+    if (existingReceipt) return;
+    
+    // Send read receipt to server
+    socket.emit('read_receipt', {
+      room,
+      messageId,
+      username,
+      userId: socket.id,
+      timestamp: Date.now()
+    });
+  };
+
+  // Handle incoming read receipts
+  const handleReadReceipt = (data) => {
+    setReadReceipts(prev => {
+      const updatedReceipts = { ...prev };
+      if (!updatedReceipts[data.messageId]) {
+        updatedReceipts[data.messageId] = [];
+      }
+      
+      // Check if this receipt already exists
+      const existingIndex = updatedReceipts[data.messageId].findIndex(
+        r => r.userId === data.userId
+      );
+      
+      if (existingIndex >= 0) {
+        // Update existing receipt
+        updatedReceipts[data.messageId][existingIndex] = data;
+      } else {
+        // Add new receipt
+        updatedReceipts[data.messageId].push(data);
+      }
+      
+      return updatedReceipts;
+    });
+  };
+
+  // Update useEffect to handle read receipts and track message visibility
+  useEffect(() => {
+    // Listen for read receipts
+    socket.on('read_receipt', handleReadReceipt);
+    
+    // Setup visibility tracking
+    const cleanup = trackMessageVisibility();
+    
+    return () => {
+      socket.off('read_receipt', handleReadReceipt);
+      if (cleanup) cleanup();
+    };
+  }, [socket, roomMessages]);
   
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
