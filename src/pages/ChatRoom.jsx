@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -10,7 +10,10 @@ import { useSelector } from "react-redux";
 const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [message, setMessage] = useState('');
   const [roomMessages, setRoomMessages] = useState([]);
-  const [darkMode, setDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const savedTheme = localStorage.getItem('theme');
+    return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showUsersList, setShowUsersList] = useState(false);
   const [notifications, setNotifications] = useState([]);
@@ -24,10 +27,10 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [currentResultIndex, setCurrentResultIndex] = useState(-1);
   const [users, setUsers] = useState([
-    { id: 1, username: 'Alice', status: 'online' },
-    { id: 2, username: 'Bob', status: 'away' },
-    { id: 3, username: 'Charlie', status: 'offline' },
-    { id: 4, username: 'David', status: 'online' },
+    { id: 1, username: 'Alice', status: 'online', lastSeen: null, customStatus: 'Working on project', isIdle: false },
+    { id: 2, username: 'Bob', status: 'away', lastSeen: new Date(Date.now() - 15 * 60000), customStatus: 'In a meeting', isIdle: true },
+    { id: 3, username: 'Charlie', status: 'offline', lastSeen: new Date(Date.now() - 120 * 60000), customStatus: '', isIdle: false },
+    { id: 4, username: 'David', status: 'online', lastSeen: null, customStatus: 'Available', isIdle: false },
   ]);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const messagesEndRef = useRef(null);
@@ -57,6 +60,12 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [attachments, setAttachments] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [uploadProgress, setUploadProgress] = useState({});
+  const [userStatus, setUserStatus] = useState('online');
+  const [customStatusMessage, setCustomStatusMessage] = useState('');
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [idleTimeout, setIdleTimeout] = useState(null);
+  const [isIdle, setIsIdle] = useState(false);
+  const IDLE_TIME = 5 * 60 * 1000; // 5 minutes
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -371,6 +380,8 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
         return 'bg-green-500';
       case 'away':
         return 'bg-yellow-500';
+      case 'busy':
+        return 'bg-red-500';
       case 'offline':
         return 'bg-gray-500';
       default:
@@ -1053,8 +1064,275 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     </div>
   );
 
+  // Apply theme effect
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDarkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => {
+    setIsDarkMode(prevMode => !prevMode);
+  };
+
+  // Track user activity for idle status
+  useEffect(() => {
+    const resetIdleTimer = () => {
+      if (isIdle) {
+        // User is back from being idle
+        setIsIdle(false);
+        
+        // Update user status if it was previously set to away due to idle
+        if (userStatus === 'away' && !customStatusMessage.includes('(Auto: Away)')) {
+          setUserStatus('online');
+          
+          // Notify others that user is back online
+          socket && socket.emit('updateUserStatus', {
+            username,
+            status: 'online',
+            customStatus: customStatusMessage
+          });
+        }
+      }
+      
+      // Clear existing timeout
+      if (idleTimeout) clearTimeout(idleTimeout);
+      
+      // Set new idle timeout
+      const timeout = setTimeout(() => {
+        setIsIdle(true);
+        
+        // Only change status to away if currently online
+        if (userStatus === 'online') {
+          setUserStatus('away');
+          
+          // Notify others that user is away
+          socket && socket.emit('updateUserStatus', {
+            username,
+            status: 'away',
+            customStatus: customStatusMessage + ' (Auto: Away)'
+          });
+        }
+      }, IDLE_TIME);
+      
+      setIdleTimeout(timeout);
+    };
+    
+    // Add event listeners to detect user activity
+    const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart'];
+    events.forEach(event => document.addEventListener(event, resetIdleTimer));
+    
+    // Initial setup
+    resetIdleTimer();
+    
+    // Cleanup
+    return () => {
+      events.forEach(event => document.removeEventListener(event, resetIdleTimer));
+      if (idleTimeout) clearTimeout(idleTimeout);
+    };
+  }, [idleTimeout, isIdle, userStatus, customStatusMessage, username, socket]);
+  
+  // Handle manual status changes
+  const updateUserStatus = (status, customMessage = customStatusMessage) => {
+    setUserStatus(status);
+    setCustomStatusMessage(customMessage);
+    
+    // Update last seen timestamp if going offline
+    if (status === 'offline') {
+      // Find current user and update
+      setUsers(prevUsers => {
+        return prevUsers.map(user => {
+          if (user.username === username) {
+            return {
+              ...user,
+              status: 'offline',
+              lastSeen: new Date(),
+              customStatus: customMessage
+            };
+          }
+          return user;
+        });
+      });
+    }
+    
+    // Notify other users about status change
+    socket && socket.emit('updateUserStatus', {
+      username,
+      status,
+      customStatus: customMessage
+    });
+    
+    setShowStatusModal(false);
+  };
+  
+  // Format last seen time
+  const formatLastSeen = (timestamp) => {
+    if (!timestamp) return '';
+    
+    const now = new Date();
+    const diff = now - new Date(timestamp);
+    
+    // Less than a minute
+    if (diff < 60000) {
+      return 'just now';
+    }
+    
+    // Less than an hour
+    if (diff < 3600000) {
+      const minutes = Math.floor(diff / 60000);
+      return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    }
+    
+    // Less than a day
+    if (diff < 86400000) {
+      const hours = Math.floor(diff / 3600000);
+      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    }
+    
+    // Format date for older messages
+    return new Date(timestamp).toLocaleDateString();
+  };
+  
+  // Render status modal
+  const renderStatusModal = () => {
+    if (!showStatusModal) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-4 rounded-lg shadow-lg w-80">
+          <h3 className="text-lg font-medium mb-3">Update Your Status</h3>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1">Status</label>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => updateUserStatus('online')}
+                className={`px-3 py-1 rounded ${userStatus === 'online' ? 'bg-green-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+              >
+                Online
+              </button>
+              <button
+                onClick={() => updateUserStatus('away')}
+                className={`px-3 py-1 rounded ${userStatus === 'away' ? 'bg-yellow-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+              >
+                Away
+              </button>
+              <button
+                onClick={() => updateUserStatus('busy')}
+                className={`px-3 py-1 rounded ${userStatus === 'busy' ? 'bg-red-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+              >
+                Busy
+              </button>
+              <button
+                onClick={() => updateUserStatus('offline')}
+                className={`px-3 py-1 rounded ${userStatus === 'offline' ? 'bg-gray-500 text-white' : 'bg-gray-200 dark:bg-gray-700'}`}
+              >
+                Offline
+              </button>
+            </div>
+          </div>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium mb-1">Custom Status Message</label>
+            <input
+              type="text"
+              value={customStatusMessage}
+              onChange={(e) => setCustomStatusMessage(e.target.value)}
+              placeholder="What's on your mind?"
+              maxLength={50}
+              className="w-full px-3 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              {50 - customStatusMessage.length} characters remaining
+            </p>
+          </div>
+          
+          <div className="flex justify-end space-x-2">
+            <button
+              onClick={() => setShowStatusModal(false)}
+              className="px-4 py-2 text-sm border rounded"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => updateUserStatus(userStatus, customStatusMessage)}
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded"
+            >
+              Update Status
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Enhanced user list with status information
+  const renderEnhancedUsersList = () => {
+    if (!showUsersList) return null;
+    
+    return (
+      <div className="w-64 md:w-80 border-l border-gray-200 dark:border-gray-700 flex flex-col">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+          <h2 className="font-semibold">Users</h2>
+          <div className="flex items-center">
+            {/* Current user status indicator */}
+            <div
+              className="flex items-center mr-2 cursor-pointer"
+              onClick={() => setShowStatusModal(true)}
+            >
+              <div className={`w-3 h-3 rounded-full mr-1 ${getStatusColor(userStatus)}`}></div>
+              <span className="text-sm">{userStatus}</span>
+            </div>
+            <button 
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+              onClick={() => setShowUsersList(false)}
+            >
+              <FiX size={18} />
+            </button>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+            {users.map(user => (
+              <li key={user.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800">
+                <div className="flex items-center">
+                  <div className={`w-3 h-3 rounded-full mr-2 ${getStatusColor(user.status)}`}></div>
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <span className="font-medium">{user.username}</span>
+                      {user.isIdle && (
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">idle</span>
+                      )}
+                      {typingUsers[user.id] && (
+                        <span className="ml-2 text-xs text-blue-500 italic">typing...</span>
+                      )}
+                    </div>
+                    {user.customStatus && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{user.customStatus}</p>
+                    )}
+                    {user.status === 'offline' && user.lastSeen && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Last seen: {formatLastSeen(user.lastSeen)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        {renderNotificationControls()}
+      </div>
+    );
+  };
+
   return (
-    <div className={`flex flex-col h-screen ${darkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
+    <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
       <div className="fixed top-4 right-4 z-50 space-y-2">
         <AnimatePresence>
@@ -1108,25 +1386,18 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
             className="md:hidden mr-2 text-gray-500 hover:text-gray-700"
             onClick={() => navigate('/')}
           >
-            Back
+            <FiArrowLeft size={20} />
           </button>
           <h1 className="text-xl font-semibold">Chat Room</h1>
         </div>
         <div className="flex items-center space-x-2">
-          <button
-            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
-            onClick={() => setDarkMode(!darkMode)}
-            title={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+          {/* Status indicator for current user */}
+          <button 
+            onClick={() => setShowStatusModal(true)} 
+            className="flex items-center px-2 py-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
           >
-            {darkMode ? (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-              </svg>
-            )}
+            <div className={`w-3 h-3 rounded-full mr-1 ${getStatusColor(userStatus)}`}></div>
+            <span className="text-sm">{userStatus}</span>
           </button>
           <button
             className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -1353,37 +1624,12 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
           </div>
         </div>
         
-        {/* Users Sidebar */}
-        {showUsersList && (
-          <div className="w-64 border-l border-gray-200 dark:border-gray-700 flex flex-col">
-            <div className="p-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-              <h2 className="font-semibold">Users</h2>
-              <button 
-                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
-                onClick={() => setShowUsersList(false)}
-              >
-                ✕
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto">
-              <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                {users.map(user => (
-                  <li key={user.id} className="p-3 hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <div className="flex items-center">
-                      <div className={`w-2 h-2 rounded-full mr-2 ${getStatusColor(user.status)}`}></div>
-                      <span>{user.username}</span>
-                      {typingUsers[user.id] && (
-                        <span className="ml-2 text-xs text-gray-500 italic">typing...</span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            {renderNotificationControls()}
-          </div>
-        )}
+        {/* Enhanced Users Sidebar */}
+        {renderEnhancedUsersList()}
       </div>
+      
+      {/* Status Modal */}
+      {renderStatusModal()}
       
       {/* Jump to bottom button */}
       {showScrollButton && (
