@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -80,6 +80,11 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [imageRotation, setImageRotation] = useState(0);
   const [imageDragPosition, setImageDragPosition] = useState({ x: 0, y: 0 });
   const lightboxRef = useRef(null);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledMessages, setScheduledMessages] = useState([]);
+  const [showScheduledMessages, setShowScheduledMessages] = useState(false);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -2145,6 +2150,255 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
   
+  // Handle scheduled message sending
+  const scheduleMessage = () => {
+    if (!message.trim()) {
+      showNotification('Please enter a message to schedule', 'warning');
+      return;
+    }
+    
+    const now = new Date();
+    const scheduledDateTime = new Date(`${scheduledDate}T${scheduledTime}`);
+    
+    // Validate scheduled time is in the future
+    if (scheduledDateTime <= now) {
+      showNotification('Scheduled time must be in the future', 'error');
+      return;
+    }
+    
+    const newScheduledMessage = {
+      id: Date.now(),
+      text: message,
+      scheduledFor: scheduledDateTime.toISOString(),
+      timestamp: now.toISOString(),
+      userId: 1, // Current user
+      username: 'You',
+      attachments: [...attachments]
+    };
+    
+    setScheduledMessages([...scheduledMessages, newScheduledMessage]);
+    
+    // Clear inputs
+    setMessage('');
+    setAttachments([]);
+    setShowScheduleModal(false);
+    
+    showNotification(`Message scheduled for ${scheduledDateTime.toLocaleString()}`, 'success');
+  };
+  
+  // Initialize scheduled date and time fields
+  useEffect(() => {
+    if (showScheduleModal) {
+      const now = new Date();
+      // Set default time 5 minutes from now
+      const futureTime = new Date(now.getTime() + 5 * 60000);
+      
+      // Format date as YYYY-MM-DD for date input
+      const formattedDate = futureTime.toISOString().split('T')[0];
+      setScheduledDate(formattedDate);
+      
+      // Format time as HH:MM for time input
+      const hours = String(futureTime.getHours()).padStart(2, '0');
+      const minutes = String(futureTime.getMinutes()).padStart(2, '0');
+      setScheduledTime(`${hours}:${minutes}`);
+    }
+  }, [showScheduleModal]);
+  
+  // Check for scheduled messages that need to be sent
+  useEffect(() => {
+    if (scheduledMessages.length === 0) return;
+    
+    const checkScheduledInterval = setInterval(() => {
+      const now = new Date();
+      const messagesToSend = [];
+      const remainingMessages = [];
+      
+      scheduledMessages.forEach(msg => {
+        const scheduledTime = new Date(msg.scheduledFor);
+        if (scheduledTime <= now) {
+          messagesToSend.push(msg);
+        } else {
+          remainingMessages.push(msg);
+        }
+      });
+      
+      // Send messages whose time has come
+      if (messagesToSend.length > 0) {
+        messagesToSend.forEach(msg => {
+          // Create sent message object
+          const sentMessage = {
+            id: Date.now() + Math.random(),
+            text: msg.text,
+            timestamp: new Date().toISOString(),
+            userId: msg.userId,
+            username: msg.username,
+            attachments: msg.attachments || []
+          };
+          
+          // Add to room messages
+          setRoomMessages(prev => [...prev, sentMessage]);
+          
+          // Notify that scheduled message was sent
+          showNotification('Scheduled message sent', 'success');
+          
+          // In a real app, would send via socket
+          // socket.emit('chatMessage', sentMessage);
+        });
+        
+        // Update scheduled messages list
+        setScheduledMessages(remainingMessages);
+      }
+    }, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(checkScheduledInterval);
+  }, [scheduledMessages]);
+  
+  // Render scheduled messages modal
+  const renderScheduleMessageModal = () => {
+    if (!showScheduleModal) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-96">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Schedule Message</h2>
+            <button
+              onClick={() => setShowScheduleModal(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Your message will be sent at the specified time:</p>
+            <div className="p-3 bg-gray-100 dark:bg-gray-700 rounded mb-4 text-gray-800 dark:text-gray-200">
+              {message || '<No message entered>'}
+              {attachments.length > 0 && (
+                <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                  + {attachments.length} attachment(s)
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiCalendar className="text-gray-400" />
+                </div>
+                <input
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(e) => setScheduledDate(e.target.value)}
+                  className="block w-full pl-10 pr-2 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                  min={new Date().toISOString().split('T')[0]}
+                  required
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Time</label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiClock className="text-gray-400" />
+                </div>
+                <input
+                  type="time"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  className="block w-full pl-10 pr-2 py-2 border rounded dark:bg-gray-700 dark:border-gray-600"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-3">
+            <button
+              className="px-4 py-2 text-sm border rounded"
+              onClick={() => setShowScheduleModal(false)}
+            >
+              Cancel
+            </button>
+            <button
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded"
+              onClick={scheduleMessage}
+            >
+              Schedule
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Render scheduled messages list
+  const renderScheduledMessagesList = () => {
+    if (!showScheduledMessages) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-lg w-full max-h-[80vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium">Scheduled Messages</h2>
+            <button
+              onClick={() => setShowScheduledMessages(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          {scheduledMessages.length === 0 ? (
+            <p className="text-center py-6 text-gray-500 dark:text-gray-400">
+              You don't have any scheduled messages
+            </p>
+          ) : (
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {scheduledMessages.map(msg => {
+                const scheduledTime = new Date(msg.scheduledFor);
+                const timeRemaining = scheduledTime - new Date();
+                const hoursRemaining = Math.floor(timeRemaining / (1000 * 60 * 60));
+                const minutesRemaining = Math.floor((timeRemaining % (1000 * 60 * 60)) / (1000 * 60));
+                
+                return (
+                  <li key={msg.id} className="py-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded px-2">
+                    <div className="flex justify-between items-start mb-1">
+                      <span className="text-sm font-medium">
+                        Scheduled for: {scheduledTime.toLocaleString()}
+                      </span>
+                      <button
+                        onClick={() => {
+                          setScheduledMessages(prev => prev.filter(m => m.id !== msg.id));
+                          showNotification('Scheduled message canceled', 'info');
+                        }}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-gray-700 dark:text-gray-300 text-sm mb-1">{msg.text}</p>
+                    {msg.attachments && msg.attachments.length > 0 && (
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        + {msg.attachments.length} attachment(s)
+                      </div>
+                    )}
+                    <div className="text-xs text-green-500 mt-1">
+                      Sending in {hoursRemaining > 0 ? `${hoursRemaining}h ` : ''}{minutesRemaining}m
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -2244,6 +2498,19 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
             </svg>
+          </button>
+          {/* Scheduled messages button */}
+          <button
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700 relative"
+            onClick={() => setShowScheduledMessages(true)}
+            title="Scheduled Messages"
+          >
+            <FiClock size={18} />
+            {scheduledMessages.length > 0 && (
+              <span className="absolute -top-1 -right-1 text-xs bg-blue-500 text-white rounded-full w-4 h-4 flex items-center justify-center">
+                {scheduledMessages.length}
+              </span>
+            )}
           </button>
         </div>
       </header>
@@ -2439,6 +2706,15 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                 <FaMicrophone />
               </button>
               
+              {/* Schedule button */}
+              <button
+                onClick={() => setShowScheduleModal(true)}
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 mx-1"
+                title="Schedule message"
+              >
+                <FiClock size={20} />
+              </button>
+              
               <button
                 onClick={showFileUpload ? sendMessageWithFiles : handleSendMessage}
                 disabled={(!showFileUpload && message.trim() === '') || isLoading}
@@ -2484,6 +2760,12 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
       {/* Image Lightbox */}
       <AnimatePresence>
         {lightboxImage && renderLightbox()}
+      </AnimatePresence>
+      
+      {/* Scheduled message modals */}
+      <AnimatePresence>
+        {showScheduleModal && renderScheduleMessageModal()}
+        {showScheduledMessages && renderScheduledMessagesList()}
       </AnimatePresence>
     </div>
   );
