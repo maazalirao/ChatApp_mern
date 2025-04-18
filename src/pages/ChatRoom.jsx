@@ -1299,826 +1299,6 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   
   // Handle file selection
   const handleFileSelect = (event) => {
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight, FiLock, FiKey, FiShield } from 'react-icons/fi';
-import { FaMicrophone, FaStop } from 'react-icons/fa';
-import { toast } from 'react-hot-toast';
-import { FaPaperPlane } from 'react-icons/fa';
-import { useSelector } from "react-redux";
-
-const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
-  const [message, setMessage] = useState('');
-  const [roomMessages, setRoomMessages] = useState([]);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme ? savedTheme === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [showUsersList, setShowUsersList] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [typingUsers, setTypingUsers] = useState({});
-  const [typingTimeout, setTypingTimeout] = useState(null);
-  const [reactions, setReactions] = useState({});
-  const [activeReactionMessage, setActiveReactionMessage] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [showSearch, setShowSearch] = useState(false);
-  const [searchResults, setSearchResults] = useState([]);
-  const [currentResultIndex, setCurrentResultIndex] = useState(-1);
-  const [users, setUsers] = useState([
-    { id: 1, username: 'Alice', status: 'online', lastSeen: null, customStatus: 'Working on project', isIdle: false },
-    { id: 2, username: 'Bob', status: 'away', lastSeen: new Date(Date.now() - 15 * 60000), customStatus: 'In a meeting', isIdle: true },
-    { id: 3, username: 'Charlie', status: 'offline', lastSeen: new Date(Date.now() - 120 * 60000), customStatus: '', isIdle: false },
-    { id: 4, username: 'David', status: 'online', lastSeen: null, customStatus: 'Available', isIdle: false },
-  ]);
-  const [showScrollButton, setShowScrollButton] = useState(false);
-  const messagesEndRef = useRef(null);
-  const messagesContainerRef = useRef(null);
-  const [showThemeSettings, setShowThemeSettings] = useState(false);
-  const [customTheme, setCustomTheme] = useState({
-    primaryColor: '#3b82f6', // Default blue
-    secondaryColor: '#10b981', // Default green
-    accentColor: '#8b5cf6', // Default purple
-  });
-  const [isRecording, setIsRecording] = useState(false);
-  const [audioBlob, setAudioBlob] = useState(null);
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const recordingTimerRef = useRef(null);
-  const [showFileUpload, setShowFileUpload] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState([]);
-  const fileInputRef = useRef(null);
-  const [notificationSettings, setNotificationSettings] = useState({
-    soundEnabled: true,
-    desktopEnabled: false,
-    mentionsOnly: false
-  });
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [hasPermission, setHasPermission] = useState(false);
-  const notificationAudio = useMemo(() => new Audio('/notification.mp3'), []);
-  const [attachments, setAttachments] = useState([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState({});
-  const [userStatus, setUserStatus] = useState('online');
-  const [customStatusMessage, setCustomStatusMessage] = useState('');
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [idleTimeout, setIdleTimeout] = useState(null);
-  const [isIdle, setIsIdle] = useState(false);
-  const IDLE_TIME = 5 * 60 * 1000; // 5 minutes
-  const [activeThread, setActiveThread] = useState(null);
-  const [showThreads, setShowThreads] = useState(false);
-  const [threadReplies, setThreadReplies] = useState({});
-  const [threadParentLookup, setThreadParentLookup] = useState({});
-  const threadListRef = useRef(null);
-  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
-  const [lastKeyPressTime, setLastKeyPressTime] = useState(0);
-  const [keySequence, setKeySequence] = useState([]);
-  const messageInputRef = useRef(null);
-  const [lightboxImage, setLightboxImage] = useState(null);
-  const [imageScale, setImageScale] = useState(1);
-  const [imageRotation, setImageRotation] = useState(0);
-  const [imageDragPosition, setImageDragPosition] = useState({ x: 0, y: 0 });
-  const lightboxRef = useRef(null);
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [scheduledTime, setScheduledTime] = useState('');
-  const [scheduledDate, setScheduledDate] = useState('');
-  const [scheduledMessages, setScheduledMessages] = useState([]);
-  const [showScheduledMessages, setShowScheduledMessages] = useState(false);
-  const [readReceipts, setReadReceipts] = useState({});
-  const [showReadReceipts, setShowReadReceipts] = useState(true);
-  const [translations, setTranslations] = useState({});
-  const [userLanguage, setUserLanguage] = useState('en');
-  const [autoTranslate, setAutoTranslate] = useState(false);
-  const [translating, setTranslating] = useState(false);
-  const [supportedLanguages, setSupportedLanguages] = useState([
-    { code: 'en', name: 'English' },
-    { code: 'es', name: 'Spanish' },
-    { code: 'fr', name: 'French' },
-    { code: 'de', name: 'German' },
-    { code: 'it', name: 'Italian' },
-    { code: 'pt', name: 'Portuguese' },
-    { code: 'ja', name: 'Japanese' },
-    { code: 'ko', name: 'Korean' },
-    { code: 'zh', name: 'Chinese' },
-    { code: 'ru', name: 'Russian' },
-    { code: 'ar', name: 'Arabic' },
-  ]);
-  const [showLanguageSettings, setShowLanguageSettings] = useState(false);
-  const [bookmarks, setBookmarks] = useState([]);
-  const [showBookmarks, setShowBookmarks] = useState(false);
-  const [activeBookmark, setActiveBookmark] = useState(null);
-  const [bookmarkNote, setBookmarkNote] = useState('');
-  const [bookmarkCategories, setBookmarkCategories] = useState([
-    { id: 1, name: 'Important', color: 'red' },
-    { id: 2, name: 'Todo', color: 'green' },
-    { id: 3, name: 'Question', color: 'blue' },
-    { id: 4, name: 'Idea', color: 'purple' },
-    { id: 5, name: 'Follow-up', color: 'orange' }
-  ]);
-  const [bookmarkCategory, setBookmarkCategory] = useState(1);
-  const [showAddBookmarkModal, setShowAddBookmarkModal] = useState(false);
-  const [showFormatting, setShowFormatting] = useState(false);
-  const [messageSelection, setMessageSelection] = useState({ start: 0, end: 0 });
-  const [messageFormat, setMessageFormat] = useState({
-    bold: false,
-    italic: false,
-    code: false,
-    link: false,
-  });
-  const [showLinkModal, setShowLinkModal] = useState(false);
-  const [linkUrl, setLinkUrl] = useState('');
-  const [linkText, setLinkText] = useState('');
-  const [showEncryptionSettings, setShowEncryptionSettings] = useState(false);
-  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
-  const [encryptionKey, setEncryptionKey] = useState('');
-  const [privateMessageUser, setPrivateMessageUser] = useState(null);
-  const [isPrivateMode, setIsPrivateMode] = useState(false);
-  const [encryptedMessages, setEncryptedMessages] = useState({});
-  const [keysExchanged, setKeysExchanged] = useState({});
-  
-  const { roomId } = useParams();
-  const messageRefs = useRef({});
-  
-  // Animation variants for messages
-  const bubbleVariants = {
-    tap: { scale: 0.98 },
-    hover: { scale: 1.02 }
-  };
-  
-  // Animation variants for notifications
-  const notificationVariants = {
-    initial: { opacity: 0, y: -50 },
-    animate: { opacity: 1, y: 0 },
-    exit: { opacity: 0, y: -50 }
-  };
-  
-  // Show notification
-  const showNotification = (message, type = 'info') => {
-    const id = Date.now();
-    setNotifications(prev => [...prev, { id, message, type }]);
-    
-    // Auto-remove notification after 3 seconds
-    setTimeout(() => {
-      setNotifications(prev => prev.filter(n => n.id !== id));
-    }, 3000);
-  };
-  
-  // Search messages
-  const handleSearch = (e) => {
-    e.preventDefault();
-    if (!searchQuery.trim()) return;
-    
-    const query = searchQuery.toLowerCase();
-    const results = roomMessages.filter(msg => 
-      msg.text.toLowerCase().includes(query)
-    );
-    
-    setSearchResults(results);
-    setCurrentResultIndex(results.length > 0 ? 0 : -1);
-    
-    if (results.length === 0) {
-      showNotification('No messages found', 'info');
-    } else {
-      scrollToMessage(results[0].id);
-      showNotification(`Found ${results.length} messages`, 'success');
-    }
-  };
-  
-  // Navigate between search results
-  const navigateResults = (direction) => {
-    if (searchResults.length === 0) return;
-    
-    let newIndex;
-    if (direction === 'next') {
-      newIndex = (currentResultIndex + 1) % searchResults.length;
-    } else {
-      newIndex = (currentResultIndex - 1 + searchResults.length) % searchResults.length;
-    }
-    
-    setCurrentResultIndex(newIndex);
-    scrollToMessage(searchResults[newIndex].id);
-  };
-  
-  // Scroll to a specific message
-  const scrollToMessage = (messageId) => {
-    if (messageRefs.current[messageId]) {
-      messageRefs.current[messageId].scrollIntoView({
-        behavior: 'smooth',
-        block: 'center'
-      });
-      
-      // Highlight message briefly
-      const element = messageRefs.current[messageId];
-      element.classList.add('bg-yellow-100', 'dark:bg-yellow-900');
-      setTimeout(() => {
-        element.classList.remove('bg-yellow-100', 'dark:bg-yellow-900');
-      }, 1500);
-    }
-  };
-  
-  // Apply formatting to message
-  const applyFormatting = (type) => {
-    const input = document.getElementById('message-input');
-    if (!input) return;
-    
-    const start = input.selectionStart;
-    const end = input.selectionEnd;
-    const text = message;
-    const selectedText = text.substring(start, end);
-    
-    let formattedText = '';
-    switch (type) {
-      case 'bold':
-        formattedText = `**${selectedText}**`;
-        break;
-      case 'italic':
-        formattedText = `_${selectedText}_`;
-        break;
-      default:
-        return;
-    }
-    
-    const newText = text.substring(0, start) + formattedText + text.substring(end);
-    setMessage(newText);
-    
-    // Focus back on input after formatting
-    setTimeout(() => {
-      input.focus();
-      input.setSelectionRange(start + 2, end + 2);
-    }, 0);
-  };
-  
-  // Handle typing indicator
-  const handleTyping = () => {
-    // Simulate sending typing status to server
-    setIsTyping(true);
-    
-    // Clear previous timeout
-    if (typingTimeout) {
-      clearTimeout(typingTimeout);
-    }
-    
-    // Set new timeout
-    const timeout = setTimeout(() => {
-      setIsTyping(false);
-    }, 3000);
-    
-    setTypingTimeout(timeout);
-  };
-  
-  // Handle adding a reaction to a message
-  const handleAddReaction = (emoji, messageId) => {
-    const currentUserId = 1; // Assuming current user ID
-    
-    // Update reactions state
-    setReactions(prevReactions => {
-      // Get existing reactions for this message
-      const messageReactions = prevReactions[messageId] || [];
-      
-      // Check if user already reacted with this emoji
-      const existingReactionIndex = messageReactions.findIndex(
-        r => r.emoji === emoji && r.userId === currentUserId
-      );
-      
-      let updatedMessageReactions;
-      
-      if (existingReactionIndex >= 0) {
-        // Remove reaction if it already exists
-        updatedMessageReactions = [
-          ...messageReactions.slice(0, existingReactionIndex),
-          ...messageReactions.slice(existingReactionIndex + 1)
-        ];
-      } else {
-        // Add new reaction
-        updatedMessageReactions = [
-          ...messageReactions,
-          { emoji, userId: currentUserId, username: 'You' }
-        ];
-      }
-      
-      return {
-        ...prevReactions,
-        [messageId]: updatedMessageReactions
-      };
-    });
-    
-    setActiveReactionMessage(null);
-  };
-  
-  // Render reactions for a message
-  const renderReactions = (messageId) => {
-    const messageReactions = reactions[messageId] || [];
-    
-    if (messageReactions.length === 0) {
-      return null;
-    }
-    
-    // Group reactions by emoji
-    const groupedReactions = messageReactions.reduce((acc, reaction) => {
-      if (!acc[reaction.emoji]) {
-        acc[reaction.emoji] = [];
-      }
-      acc[reaction.emoji].push(reaction);
-      return acc;
-    }, {});
-    
-    return (
-      <div className="flex flex-wrap gap-1 mt-1">
-        {Object.entries(groupedReactions).map(([emoji, users]) => (
-          <button
-            key={emoji}
-            onClick={() => handleAddReaction(emoji, messageId)}
-            className="bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-full px-2 py-0.5 text-xs flex items-center space-x-1 hover:bg-gray-200 dark:hover:bg-gray-600"
-            title={users.map(u => u.username).join(', ')}
-          >
-            <span>{emoji}</span>
-            <span>{users.length}</span>
-          </button>
-        ))}
-      </div>
-    );
-  };
-  
-  // Simulate other users typing (for demo purposes)
-  useEffect(() => {
-    // Randomly have Bob or Alice start typing
-    const randomStartTyping = () => {
-      const randomUser = Math.random() > 0.5 ? 
-        { id: 2, username: 'Bob' } : 
-        { id: 1, username: 'Alice' };
-      
-      setTypingUsers(prev => ({
-        ...prev,
-        [randomUser.id]: randomUser.username
-      }));
-      
-      // Stop typing after random time
-      setTimeout(() => {
-        setTypingUsers(prev => {
-          const newTypingUsers = { ...prev };
-          delete newTypingUsers[randomUser.id];
-          return newTypingUsers;
-        });
-      }, 2000 + Math.random() * 3000);
-    };
-    
-    // Set interval for random typing events
-    const typingInterval = setInterval(() => {
-      if (Math.random() > 0.7) {
-        randomStartTyping();
-      }
-    }, 5000);
-    
-    return () => clearInterval(typingInterval);
-  }, []);
-  
-  // Render typing indicator
-  const renderTypingIndicator = () => {
-    const typingUsersList = Object.keys(typingUsers).map(id => typingUsers[id]);
-    
-    if (typingUsersList.length === 0) {
-      return null;
-    }
-    
-    let typingText = '';
-    if (typingUsersList.length === 1) {
-      typingText = `${typingUsersList[0]} is typing...`;
-    } else if (typingUsersList.length === 2) {
-      typingText = `${typingUsersList[0]} and ${typingUsersList[1]} are typing...`;
-    } else {
-      typingText = 'Several people are typing...';
-    }
-    
-    return (
-      <div className="text-xs text-gray-500 italic p-2 animate-pulse">
-        {typingText}
-        <span className="inline-block">
-          <span className="dots-typing">
-            <span>.</span><span>.</span><span>.</span>
-          </span>
-        </span>
-      </div>
-    );
-  };
-  
-  // Add styles for typing dots animation
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes dotTyping {
-        0% { opacity: 0; }
-        50% { opacity: 1; }
-        100% { opacity: 0; }
-      }
-      
-      .dots-typing span {
-        animation: dotTyping 1.5s infinite;
-        display: inline-block;
-        opacity: 0;
-      }
-      
-      .dots-typing span:nth-child(1) {
-        animation-delay: 0s;
-      }
-      
-      .dots-typing span:nth-child(2) {
-        animation-delay: 0.5s;
-      }
-      
-      .dots-typing span:nth-child(3) {
-        animation-delay: 1s;
-      }
-    `;
-    document.head.appendChild(style);
-    
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
-  // Add emoji to message
-  const addEmoji = (emoji) => {
-    setMessage(message + emoji);
-    setShowEmojiPicker(false);
-  };
-  
-  // Get status color
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'online':
-        return 'bg-green-500';
-      case 'away':
-        return 'bg-yellow-500';
-      case 'busy':
-        return 'bg-red-500';
-      case 'offline':
-        return 'bg-gray-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
-  
-  // Get notification color
-  const getNotificationColor = (type) => {
-    switch (type) {
-      case 'success':
-        return 'bg-green-500';
-      case 'error':
-        return 'bg-red-500';
-      case 'warning':
-        return 'bg-yellow-500';
-      case 'command':
-        return 'bg-purple-500';
-      default:
-        return 'bg-blue-500';
-    }
-  };
-  
-  // Handle send message
-  const handleSendMessage = (e) => {
-    e.preventDefault();
-    if (message.trim()) {
-      const newMessage = { 
-        id: Date.now(),
-        text: message,
-        timestamp: new Date().toISOString(),
-        userId: 1, // Assuming current user
-        username: 'You'
-      };
-      
-      setRoomMessages([...roomMessages, newMessage]);
-      setMessage('');
-      showNotification('Message sent', 'success');
-    }
-  };
-  
-  // Clear search
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setCurrentResultIndex(-1);
-    setShowSearch(false);
-  };
-  
-  // Add some sample messages for testing search
-  useEffect(() => {
-    if (roomMessages.length === 0) {
-      const sampleMessages = [
-        { id: 1, text: "Hello everyone!", timestamp: new Date().toISOString(), userId: 2, username: "Alice" },
-        { id: 2, text: "Hi Alice, how are you doing today?", timestamp: new Date().toISOString(), userId: 3, username: "Bob" },
-        { id: 3, text: "I'm doing great, thanks for asking!", timestamp: new Date().toISOString(), userId: 2, username: "Alice" },
-        { id: 4, text: "Welcome to our chat room", timestamp: new Date().toISOString(), userId: 4, username: "David" },
-        { id: 5, text: "Has anyone seen the latest product update?", timestamp: new Date().toISOString(), userId: 3, username: "Bob" },
-      ];
-      setRoomMessages(sampleMessages);
-    }
-  }, [roomMessages.length]);
-  
-  // Format message text with markdown support
-  const formatMessageText = (text) => {
-    if (!text) return null;
-    
-    // Process markdown
-    // 1. Code blocks
-    let formattedText = text.replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-800 text-gray-200 p-2 rounded my-1 overflow-x-auto">$1</pre>');
-    
-    // 2. Inline code
-    formattedText = formattedText.replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 px-1 rounded">$1</code>');
-    
-    // 3. Bold
-    formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    
-    // 4. Italic
-    formattedText = formattedText.replace(/_(.*?)_/g, '<em>$1</em>');
-    
-    // 5. Links
-    formattedText = formattedText.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
-    
-    // 6. Auto-detect URLs not in markdown format
-    const urlPattern = /(\bhttps?:\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gi;
-    formattedText = formattedText.replace(urlPattern, '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 hover:underline">$1</a>');
-    
-    return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
-  };
-  
-  // Auto-scroll function that scrolls to the bottom of messages
-  const scrollToBottom = (behavior = 'auto') => {
-    messagesEndRef.current?.scrollIntoView({ behavior });
-  };
-
-  // Check if should show the jump to bottom button
-  const handleMessagesScroll = () => {
-    if (!messagesContainerRef.current) return;
-    
-    const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-    
-    // Only show button when not at bottom and have some scroll distance
-    setShowScrollButton(!isAtBottom && scrollHeight > clientHeight + 200);
-  };
-
-  // Scroll to bottom when new messages arrive if already at bottom
-  useEffect(() => {
-    if (roomMessages.length > 0) {
-      // Auto-scroll only if user was already at the bottom
-      if (!showScrollButton) {
-        scrollToBottom();
-      }
-    }
-  }, [roomMessages, showScrollButton]);
-
-  // Scroll to bottom on initial load and room change
-  useEffect(() => {
-    scrollToBottom();
-  }, [roomId]);
-  
-  // Apply custom theme colors to CSS variables
-  useEffect(() => {
-    document.documentElement.style.setProperty('--primary-color', customTheme.primaryColor);
-    document.documentElement.style.setProperty('--secondary-color', customTheme.secondaryColor);
-    document.documentElement.style.setProperty('--accent-color', customTheme.accentColor);
-  }, [customTheme]);
-
-  const handleThemeChange = (property, value) => {
-    setCustomTheme(prev => ({
-      ...prev,
-      [property]: value
-    }));
-  };
-
-  const renderThemeSettings = () => {
-    if (!showThemeSettings) return null;
-
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -10 }}
-        className="absolute right-0 top-16 z-50 w-72 rounded-lg bg-white dark:bg-gray-800 p-4 shadow-lg"
-      >
-        <h3 className="font-semibold mb-3 text-gray-700 dark:text-gray-200">Customize Theme</h3>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Primary Color
-            </label>
-            <div className="flex items-center">
-              <input
-                type="color"
-                value={customTheme.primaryColor}
-                onChange={(e) => handleThemeChange('primaryColor', e.target.value)}
-                className="h-8 w-8 rounded cursor-pointer"
-              />
-              <input
-                type="text"
-                value={customTheme.primaryColor}
-                onChange={(e) => handleThemeChange('primaryColor', e.target.value)}
-                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
-              />
-              <button
-                onClick={() => handleThemeChange('primaryColor', '#3b82f6')}
-                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Secondary Color
-            </label>
-            <div className="flex items-center">
-              <input
-                type="color"
-                value={customTheme.secondaryColor}
-                onChange={(e) => handleThemeChange('secondaryColor', e.target.value)}
-                className="h-8 w-8 rounded cursor-pointer"
-              />
-              <input
-                type="text"
-                value={customTheme.secondaryColor}
-                onChange={(e) => handleThemeChange('secondaryColor', e.target.value)}
-                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
-              />
-              <button
-                onClick={() => handleThemeChange('secondaryColor', '#10b981')}
-                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Accent Color
-            </label>
-            <div className="flex items-center">
-              <input
-                type="color"
-                value={customTheme.accentColor}
-                onChange={(e) => handleThemeChange('accentColor', e.target.value)}
-                className="h-8 w-8 rounded cursor-pointer"
-              />
-              <input
-                type="text"
-                value={customTheme.accentColor}
-                onChange={(e) => handleThemeChange('accentColor', e.target.value)}
-                className="ml-2 px-2 py-1 w-24 text-sm border rounded"
-              />
-              <button
-                onClick={() => handleThemeChange('accentColor', '#8b5cf6')}
-                className="ml-2 text-xs text-blue-500 hover:text-blue-600"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 flex justify-end">
-          <button 
-            onClick={() => setShowThemeSettings(false)}
-            className="px-3 py-1 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
-          >
-            Close
-          </button>
-        </div>
-      </motion.div>
-    );
-  };
-  
-  const [isScrolledUp, setIsScrolledUp] = useState(false);
-  const [newMessagesCount, setNewMessagesCount] = useState(0);
-  
-  // Add scroll position tracking
-  useEffect(() => {
-    const chatContainer = messagesEndRef.current;
-    if (!chatContainer) return;
-    
-    const handleScroll = () => {
-      const { scrollTop, scrollHeight, clientHeight } = chatContainer;
-      const isAtBottom = scrollHeight - scrollTop - clientHeight < 100;
-      
-      setIsScrolledUp(!isAtBottom);
-      
-      // Reset new messages count when scrolled to bottom
-      if (isAtBottom) {
-        setNewMessagesCount(0);
-      }
-    };
-    
-    chatContainer.addEventListener('scroll', handleScroll);
-    return () => chatContainer.removeEventListener('scroll', handleScroll);
-  }, []);
-  
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    if (roomMessages.length && messagesEndRef.current) {
-      if (!isScrolledUp) {
-        scrollToBottom();
-      } else {
-        // Increment new messages count when user is scrolled up
-        setNewMessagesCount(prev => prev + 1);
-      }
-    }
-  }, [roomMessages.length]);
-  
-  // Handle voice recording
-  const startRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks = [];
-      
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-      
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: 'audio/webm' });
-        setAudioBlob(blob);
-        stream.getTracks().forEach(track => track.stop());
-      };
-      
-      // Start recording
-      recorder.start();
-      setMediaRecorder(recorder);
-      setIsRecording(true);
-      setRecordingTime(0);
-      
-      // Setup timer to track recording duration
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-      
-    } catch (err) {
-      console.error("Error accessing microphone:", err);
-      toast.error("Could not access microphone. Please check permissions.");
-    }
-  };
-  
-  const stopRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      clearInterval(recordingTimerRef.current);
-    }
-  };
-  
-  const sendVoiceMessage = async () => {
-    if (!audioBlob) return;
-    
-    try {
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      reader.onloadend = () => {
-        const base64Audio = reader.result;
-        
-        // Send voice message
-        socket.emit('chatMessage', {
-          room,
-          username,
-          text: '',
-          timestamp: new Date().toISOString(),
-          type: 'audio',
-          audio: base64Audio,
-        });
-        
-        // Reset audio state
-        setAudioBlob(null);
-      };
-    } catch (err) {
-      console.error("Error sending voice message:", err);
-      toast.error("Failed to send voice message");
-    }
-  };
-  
-  const cancelRecording = () => {
-    if (mediaRecorder && isRecording) {
-      mediaRecorder.stop();
-      setIsRecording(false);
-      clearInterval(recordingTimerRef.current);
-      setAudioBlob(null);
-    }
-  };
-
-  // Format seconds to MM:SS
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  };
-  
-  // Handle file selection
-  const handleFileSelect = (event) => {
     const files = Array.from(event.target.files);
     handleFiles(files);
   };
@@ -5294,6 +4474,105 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
   
+  const [messageReadStatus, setMessageReadStatus] = useState({});
+  
+  // Initialize Intersection Observer to detect when messages are viewed
+  useEffect(() => {
+    if (!socket) return;
+    
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const messageId = entry.target.dataset.messageId;
+          if (messageId) {
+            // Send read receipt to server
+            socket.emit('message_read', { 
+              roomId, 
+              messageId, 
+              userId: users.find(u => u.username === username)?.id || 1,
+              readAt: new Date().toISOString()
+            });
+          }
+        }
+      });
+    }, { threshold: 0.5 });
+    
+    // Attach observer to message elements
+    const attachObserver = () => {
+      const messageElements = document.querySelectorAll('.message-item');
+      messageElements.forEach(el => observer.observe(el));
+    };
+    
+    // Initial attachment
+    attachObserver();
+    
+    // Reattach when messages change
+    const messageObserver = new MutationObserver(attachObserver);
+    const messagesContainer = document.querySelector('.messages-container');
+    if (messagesContainer) {
+      messageObserver.observe(messagesContainer, { childList: true, subtree: true });
+    }
+    
+    // Listen for read receipts from server
+    const handleReadReceipt = (data) => {
+      setMessageReadStatus(prev => ({
+        ...prev,
+        [data.messageId]: {
+          ...(prev[data.messageId] || {}),
+          [data.userId]: data.readAt
+        }
+      }));
+    };
+    
+    socket.on('message_read_receipt', handleReadReceipt);
+    
+    return () => {
+      observer.disconnect();
+      messageObserver.disconnect();
+      socket.off('message_read_receipt', handleReadReceipt);
+    };
+  }, [socket, roomId, username, users]);
+  
+  // Function to render read receipts
+  const renderReadReceipts = (message) => {
+    if (!messageReadStatus[message.id]) return null;
+    
+    const readByCount = Object.keys(messageReadStatus[message.id]).length;
+    if (readByCount === 0) return null;
+    
+    return (
+      <div className="read-receipts">
+        <FiCheck 
+          className={`read-icon ${readByCount > 0 ? 'active' : ''}`}
+          color={readByCount > 0 ? '#4caf50' : '#ccc'}
+        />
+        {readByCount > 1 && (
+          <span className="read-count">{readByCount}</span>
+        )}
+      </div>
+    );
+  };
+  
+  // Update message rendering to include read receipts
+  const renderMessage = useCallback((msg) => {
+    const isCurrentUser = msg.userId === (users.find(u => u.username === username)?.id || 1);
+    
+    // ... existing message rendering code ...
+    
+    return (
+      <div 
+        className={`message-item ${isCurrentUser ? 'sent' : 'received'}`}
+        ref={el => messageRefs.current[msg.id] = el}
+        data-message-id={msg.id}
+      >
+        {/* ... existing message content ... */}
+        
+        {/* Add read receipts at the end of the message for current user's messages */}
+        {isCurrentUser && renderReadReceipts(msg)}
+      </div>
+    );
+  }, [messageReadStatus, users, username]);
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -5766,6 +5045,36 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
       </AnimatePresence>
       {/* Private chat indicator */}
       {renderPrivateChatIndicator()}
+      <style jsx>{`
+        // ... existing styles ...
+        .read-receipts {
+          display: flex;
+          align-items: center;
+          margin-left: auto;
+          font-size: 12px;
+          color: #8a8a8a;
+        }
+        
+        .read-icon {
+          margin-right: 4px;
+          transition: color 0.3s ease;
+        }
+        
+        .read-icon.active {
+          color: #4caf50;
+        }
+        
+        .read-count {
+          font-size: 10px;
+          background: #e1e1e1;
+          border-radius: 50%;
+          width: 16px;
+          height: 16px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+      `}</style>
     </div>
   );
 };
