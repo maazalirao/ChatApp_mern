@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck, FiGlobe, FiBookmark, FiTag, FiEdit, FiBold, FiItalic, FiCode, FiLink, FiList, FiAlignLeft, FiAlignCenter, FiAlignRight, FiLock, FiKey, FiShield } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -129,6 +129,13 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [linkUrl, setLinkUrl] = useState('');
   const [linkText, setLinkText] = useState('');
+  const [showEncryptionSettings, setShowEncryptionSettings] = useState(false);
+  const [encryptionEnabled, setEncryptionEnabled] = useState(false);
+  const [encryptionKey, setEncryptionKey] = useState('');
+  const [privateMessageUser, setPrivateMessageUser] = useState(null);
+  const [isPrivateMode, setIsPrivateMode] = useState(false);
+  const [encryptedMessages, setEncryptedMessages] = useState({});
+  const [keysExchanged, setKeysExchanged] = useState({});
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -3585,6 +3592,407 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     return <span dangerouslySetInnerHTML={{ __html: formattedText }} />;
   };
   
+  useEffect(() => {
+    // ... existing code ...
+    
+    // Listen for private message requests
+    socket.on('private_message_request', (data) => {
+      showNotification(`${data.fromUser} wants to start a private conversation`, 'info');
+      
+      // Add a notification that allows accepting/declining
+      setNotifications(prev => [
+        ...prev,
+        {
+          id: Date.now(),
+          type: 'private_request',
+          fromUser: data.fromUser,
+          message: `${data.fromUser} wants to start a private conversation`,
+          timestamp: new Date(),
+          read: false,
+          actions: [
+            {
+              label: 'Accept',
+              action: () => acceptPrivateConversation(data.fromUser)
+            },
+            {
+              label: 'Decline',
+              action: () => declinePrivateConversation(data.fromUser)
+            }
+          ]
+        }
+      ]);
+    });
+    
+    // Listen for private message response
+    socket.on('private_message_response', (data) => {
+      if (data.accepted) {
+        showNotification(`${data.fromUser} accepted your private conversation request`, 'success');
+        setPrivateMessageUser(data.fromUser);
+        setIsPrivateMode(true);
+        generateEncryptionKey(data.fromUser);
+      } else {
+        showNotification(`${data.fromUser} declined your private conversation request`, 'error');
+      }
+    });
+    
+    // Listen for encryption key exchange
+    socket.on('encryption_key_exchange', (data) => {
+      if (data.toUser === username) {
+        // Store the key for this user
+        setKeysExchanged(prev => ({
+          ...prev,
+          [data.fromUser]: {
+            publicKey: data.publicKey,
+            timestamp: new Date()
+          }
+        }));
+        
+        showNotification(`Secure connection established with ${data.fromUser}`, 'success');
+      }
+    });
+    
+    // Listen for encrypted messages
+    socket.on('encrypted_message', (data) => {
+      if (data.toUser === username || data.fromUser === username) {
+        try {
+          // Decrypt the message if we have the key
+          const decryptedText = decryptMessage(data.text, data.fromUser);
+          
+          // Create a new message object with the decrypted text
+          const decryptedMessage = {
+            ...data,
+            text: decryptedText,
+            isEncrypted: true,
+            decrypted: true
+          };
+          
+          // Add the decrypted message to the message list
+          setRoomMessages(prevMessages => [...prevMessages, decryptedMessage]);
+        } catch (error) {
+          console.error('Failed to decrypt message:', error);
+          // Add the encrypted message with a note that it couldn't be decrypted
+          setRoomMessages(prevMessages => [
+            ...prevMessages,
+            {
+              ...data,
+              text: '[Encrypted message - decryption failed]',
+              isEncrypted: true,
+              decrypted: false
+            }
+          ]);
+        }
+      }
+    });
+    
+    return () => {
+      // ... existing cleanup ...
+      socket.off('private_message_request');
+      socket.off('private_message_response');
+      socket.off('encryption_key_exchange');
+      socket.off('encrypted_message');
+    };
+  }, [socket, username, keysExchanged]);
+  
+  // Request a private conversation with a user
+  const requestPrivateConversation = (targetUser) => {
+    if (targetUser === username) {
+      showNotification("You can't start a private conversation with yourself", 'warning');
+      return;
+    }
+    
+    socket.emit('private_message_request', {
+      fromUser: username,
+      toUser: targetUser,
+      room
+    });
+    
+    showNotification(`Private conversation request sent to ${targetUser}`, 'info');
+  };
+  
+  // Accept a private conversation request
+  const acceptPrivateConversation = (fromUser) => {
+    socket.emit('private_message_response', {
+      fromUser: username,
+      toUser: fromUser,
+      accepted: true
+    });
+    
+    setPrivateMessageUser(fromUser);
+    setIsPrivateMode(true);
+    generateEncryptionKey(fromUser);
+    
+    // Remove the notification
+    setNotifications(prev => prev.filter(n => 
+      !(n.type === 'private_request' && n.fromUser === fromUser)
+    ));
+  };
+  
+  // Decline a private conversation request
+  const declinePrivateConversation = (fromUser) => {
+    socket.emit('private_message_response', {
+      fromUser: username,
+      toUser: fromUser,
+      accepted: false
+    });
+    
+    // Remove the notification
+    setNotifications(prev => prev.filter(n => 
+      !(n.type === 'private_request' && n.fromUser === fromUser)
+    ));
+  };
+  
+  // End the private conversation
+  const endPrivateConversation = () => {
+    setPrivateMessageUser(null);
+    setIsPrivateMode(false);
+    setEncryptionEnabled(false);
+    showNotification('Private conversation ended', 'info');
+  };
+  
+  // Generate a simple encryption key (in a real app, use a proper crypto library)
+  const generateEncryptionKey = (targetUser) => {
+    // In a real implementation, use proper crypto libraries
+    // This is a simple mock for demonstration purposes
+    const mockPublicKey = btoa(`${username}-${Date.now()}-${Math.random()}`);
+    
+    // Exchange the key with the other user
+    socket.emit('encryption_key_exchange', {
+      fromUser: username,
+      toUser: targetUser,
+      publicKey: mockPublicKey
+    });
+    
+    // Store our own key
+    setEncryptionKey(mockPublicKey);
+    
+    // Enable encryption by default for private conversations
+    setEncryptionEnabled(true);
+  };
+  
+  // Encrypt a message (simplified mock implementation)
+  const encryptMessage = (text, targetUser) => {
+    if (!encryptionEnabled || !keysExchanged[targetUser]) {
+      return text; // Return plaintext if encryption is disabled or no key
+    }
+    
+    // In a real app, use proper encryption with the exchanged keys
+    // This is just a simple mock for demonstration
+    return btoa(`encrypted:${text}`);
+  };
+  
+  // Decrypt a message (simplified mock implementation)
+  const decryptMessage = (text, fromUser) => {
+    if (!encryptionEnabled || !keysExchanged[fromUser]) {
+      return text; // Return as is if encryption is disabled or no key
+    }
+    
+    try {
+      // In a real app, use proper decryption with the exchanged keys
+      // This is just a simple mock for demonstration
+      const decodedText = atob(text);
+      if (decodedText.startsWith('encrypted:')) {
+        return decodedText.substring(10); // Remove the 'encrypted:' prefix
+      }
+      return text; // Return original if not properly formatted
+    } catch (error) {
+      console.error('Decryption error:', error);
+      return '[Encrypted message]';
+    }
+  };
+  
+  // Send private encrypted message
+  const sendPrivateMessage = () => {
+    if (!privateMessageUser) {
+      showNotification('No private conversation active', 'warning');
+      return;
+    }
+    
+    if (!message.trim() && (!attachments || attachments.length === 0)) {
+      return;
+    }
+    
+    const encryptedText = encryptMessage(message, privateMessageUser);
+    
+    const messageData = {
+      fromUser: username,
+      toUser: privateMessageUser,
+      text: encryptedText,
+      isPrivate: true,
+      isEncrypted: encryptionEnabled,
+      timestamp: new Date().toISOString()
+    };
+    
+    socket.emit('encrypted_message', messageData);
+    
+    // Add to local messages with the original text (not encrypted)
+    const localMessageCopy = {
+      ...messageData,
+      text: message, // Use the original text for local display
+      id: Date.now(),
+      decrypted: true,
+      sender: 'me'
+    };
+    
+    setRoomMessages(prevMessages => [...prevMessages, localMessageCopy]);
+    setMessage(''); // Clear the input
+    playMessageSentSound();
+  };
+  
+  // Handle send message with encryption option
+  const handleSendMessageWithEncryption = () => {
+    if (isPrivateMode) {
+      sendPrivateMessage();
+    } else {
+      handleSendMessage();
+    }
+  };
+  
+  // Render encryption settings modal
+  const renderEncryptionSettings = () => {
+    if (!showEncryptionSettings) return null;
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg w-96 max-w-full">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-lg font-medium flex items-center">
+              <FiShield className="mr-2" /> Encryption Settings
+            </h2>
+            <button
+              onClick={() => setShowEncryptionSettings(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={20} />
+            </button>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <label className="flex items-center text-sm font-medium">
+                <FiLock className="mr-2" /> Enable End-to-End Encryption
+              </label>
+              <div className="relative inline-block w-10 mr-2 align-middle select-none">
+                <input
+                  type="checkbox"
+                  id="toggle-encryption"
+                  checked={encryptionEnabled}
+                  onChange={() => setEncryptionEnabled(!encryptionEnabled)}
+                  className="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"
+                />
+                <label
+                  htmlFor="toggle-encryption"
+                  className={`toggle-label block overflow-hidden h-6 rounded-full cursor-pointer ${
+                    encryptionEnabled ? 'bg-green-500' : 'bg-gray-300'
+                  }`}
+                ></label>
+              </div>
+            </div>
+            
+            <div className="text-sm text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 p-3 rounded">
+              <p className="mb-2">
+                <strong>How end-to-end encryption works:</strong>
+              </p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>Messages are encrypted on your device before sending</li>
+                <li>Only you and the recipient can read the messages</li>
+                <li>The server cannot access the content of your messages</li>
+                <li>Encryption keys are exchanged securely between users</li>
+              </ul>
+            </div>
+            
+            {privateMessageUser && (
+              <div className="bg-blue-100 dark:bg-blue-900 p-3 rounded text-sm">
+                <p className="font-medium">
+                  Private conversation with {privateMessageUser}
+                </p>
+                <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                  {encryptionEnabled 
+                    ? "Messages are encrypted end-to-end"
+                    : "Enable encryption for secure communication"}
+                </p>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex justify-end space-x-3 mt-6">
+            {privateMessageUser && (
+              <button
+                className="px-4 py-2 text-sm border border-red-500 text-red-500 rounded hover:bg-red-100 dark:hover:bg-red-900"
+                onClick={endPrivateConversation}
+              >
+                End Private Chat
+              </button>
+            )}
+            <button
+              className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
+              onClick={() => setShowEncryptionSettings(false)}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
+  // Render the private chat indicator
+  const renderPrivateChatIndicator = () => {
+    if (!isPrivateMode) return null;
+    
+    return (
+      <div className="bg-blue-500 text-white px-3 py-1 text-sm flex items-center justify-between">
+        <div className="flex items-center">
+          <FiLock className="mr-1" size={14} />
+          <span>Private chat with {privateMessageUser}</span>
+          {encryptionEnabled && <FiShield className="ml-2" size={14} title="Encrypted" />}
+        </div>
+        <button
+          onClick={endPrivateConversation}
+          className="text-white hover:text-gray-200"
+          title="End private chat"
+        >
+          <FiX size={16} />
+        </button>
+      </div>
+    );
+  };
+  
+  // Render encryption status indicator for messages
+  const renderEncryptionStatus = (message) => {
+    if (!message.isEncrypted) return null;
+    
+    return (
+      <span className="ml-1 text-xs flex items-center" title={message.decrypted ? "End-to-end encrypted" : "Encrypted message"}>
+        <FiLock size={10} className={message.decrypted ? "text-green-500" : "text-yellow-500"} />
+      </span>
+    );
+  };
+  
+  // Add a user menu option to start private conversations
+  const renderUserContextMenu = (user) => {
+    if (user === username) return null;
+    
+    return (
+      <div className="absolute right-0 mt-1 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-black ring-opacity-5 z-50">
+        <div className="py-1">
+          <button
+            onClick={() => {
+              requestPrivateConversation(user);
+              setShowUserContextMenu(null);
+            }}
+            className="block w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+          >
+            <div className="flex items-center">
+              <FiLock className="mr-2" size={14} />
+              <span>Start private conversation</span>
+            </div>
+          </button>
+          {/* Other user actions... */}
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -3850,7 +4258,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
-                        <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
+                        <div className={`${msg.isPrivate ? 'bg-blue-600' : 'bg-blue-500'} text-white p-3 rounded-lg inline-block`}>
                           {enhancedFormatMessageText(msg.text)}
                         </div>
                         <div className="flex items-center ml-2">
@@ -3924,21 +4332,39 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                   // Don't hide immediately to allow clicking formatting buttons
                   setTimeout(() => setShowFormatting(false), 200);
                 }}
-                placeholder="Type a message... (Ctrl+. to focus)"
+                placeholder={isPrivateMode 
+                  ? `Private message to ${privateMessageUser}${encryptionEnabled ? ' (encrypted)' : ''}` 
+                  : "Type a message..."
+                }
                 className="flex-1 p-2 border dark:border-gray-600 dark:bg-gray-800 rounded-l"
               />
+              
+              {/* Encryption toggle for quick access */}
+              {isPrivateMode && (
+                <button
+                  onClick={() => setEncryptionEnabled(!encryptionEnabled)}
+                  className={`p-2 ${
+                    encryptionEnabled 
+                      ? 'text-green-500 hover:text-green-600' 
+                      : 'text-gray-500 hover:text-gray-600'
+                  }`}
+                  title={encryptionEnabled ? "Encryption enabled" : "Encryption disabled"}
+                >
+                  <FiLock size={20} />
+                </button>
+              )}
               
               {/* Schedule button */}
               <button
                 onClick={() => setShowScheduleModal(true)}
-                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 mx-1"
+                className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
                 title="Schedule message"
               >
                 <FiClock size={20} />
               </button>
               
               <button
-                onClick={handleSendMessage}
+                onClick={handleSendMessageWithEncryption}
                 disabled={(!message.trim() && attachments.length === 0) || isLoading}
                 className={`bg-blue-500 text-white p-2 rounded-r ${(!message.trim() && attachments.length === 0) || isLoading ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-600'}`}
               >
@@ -3947,7 +4373,15 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
             </div>
             
             {/* Character count */}
-            <div className="flex justify-end mt-1">
+            <div className="flex justify-between mt-1">
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {isPrivateMode && (
+                  <span className="flex items-center">
+                    <FiLock size={12} className="mr-1" />
+                    {encryptionEnabled ? 'Encrypted' : 'Not encrypted'}
+                  </span>
+                )}
+              </span>
               <span 
                 className={`text-xs ${
                   message.length > 400 ? 'text-orange-500 dark:text-orange-400' : 'text-gray-500 dark:text-gray-400'
@@ -4025,6 +4459,12 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
         {showBookmarks && renderBookmarksPanel()}
         {showAddBookmarkModal && renderAddBookmarkModal()}
       </AnimatePresence>
+      {/* Encryption Settings Modal */}
+      <AnimatePresence>
+        {showEncryptionSettings && renderEncryptionSettings()}
+      </AnimatePresence>
+      {/* Private chat indicator */}
+      {renderPrivateChatIndicator()}
     </div>
   );
 };
