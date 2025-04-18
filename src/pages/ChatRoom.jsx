@@ -71,6 +71,10 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [threadReplies, setThreadReplies] = useState({});
   const [threadParentLookup, setThreadParentLookup] = useState({});
   const threadListRef = useRef(null);
+  const [showShortcutsModal, setShowShortcutsModal] = useState(false);
+  const [lastKeyPressTime, setLastKeyPressTime] = useState(0);
+  const [keySequence, setKeySequence] = useState([]);
+  const messageInputRef = useRef(null);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -403,6 +407,8 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
         return 'bg-red-500';
       case 'warning':
         return 'bg-yellow-500';
+      case 'command':
+        return 'bg-purple-500';
       default:
         return 'bg-blue-500';
     }
@@ -1579,6 +1585,261 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     }
   }, [roomMessages]);
   
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Don't trigger shortcuts when typing in inputs/textareas unless it's special combinations
+      if (
+        (e.target.tagName === 'INPUT' || 
+         e.target.tagName === 'TEXTAREA') && 
+        !(e.ctrlKey || e.metaKey || e.altKey)
+      ) {
+        return;
+      }
+      
+      // Handle key sequences (like Vim/Emacs style)
+      const now = Date.now();
+      if (now - lastKeyPressTime < 1000) { // 1 second timeout for sequences
+        setKeySequence(prev => [...prev, e.key]);
+      } else {
+        setKeySequence([e.key]);
+      }
+      setLastKeyPressTime(now);
+      
+      // Check for key sequences
+      const updatedSequence = [...keySequence, e.key];
+      if (updatedSequence.join('') === 'gg') {
+        // "gg" = scroll to top
+        messagesContainerRef.current.scrollTop = 0;
+        e.preventDefault();
+        setKeySequence([]);
+        showCommandFeedback('Scrolled to top');
+        return;
+      } else if (updatedSequence.join('') === 'G') {
+        // "G" = scroll to bottom
+        scrollToBottom('smooth');
+        e.preventDefault();
+        setKeySequence([]);
+        showCommandFeedback('Scrolled to bottom');
+        return;
+      }
+      
+      // Main shortcuts with modifiers
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key) {
+          case '/':
+            // Focus search
+            setShowSearch(true);
+            setTimeout(() => {
+              document.querySelector('input[placeholder="Search messages..."]')?.focus();
+            }, 0);
+            e.preventDefault();
+            showCommandFeedback('Search activated');
+            break;
+            
+          case 'k':
+            // Show keyboard shortcuts
+            setShowShortcutsModal(true);
+            e.preventDefault();
+            break;
+            
+          case '.':
+            // Focus message input
+            messageInputRef.current?.focus();
+            e.preventDefault();
+            showCommandFeedback('Message input focused');
+            break;
+            
+          case 'b':
+            // Bold text
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+              applyFormatting('bold');
+              e.preventDefault();
+              showCommandFeedback('Bold formatting applied');
+            }
+            break;
+            
+          case 'i':
+            // Italic text
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') {
+              applyFormatting('italic');
+              e.preventDefault();
+              showCommandFeedback('Italic formatting applied');
+            }
+            break;
+            
+          default:
+            break;
+        }
+      } else {
+        // Shortcuts without modifiers
+        switch (e.key) {
+          case 'Escape':
+            // Close modals
+            if (showShortcutsModal) {
+              setShowShortcutsModal(false);
+            } else if (showSearch) {
+              setShowSearch(false);
+            } else if (showEmojiPicker) {
+              setShowEmojiPicker(false);
+            } else if (showThemeSettings) {
+              setShowThemeSettings(false);
+            } else if (showUsersList) {
+              setShowUsersList(false);
+            } else if (showThreads) {
+              closeThreadPanel();
+            }
+            break;
+            
+          case 'j':
+            // Navigate down (if not typing)
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+              messagesContainerRef.current.scrollTop += 100;
+              e.preventDefault();
+            }
+            break;
+            
+          case 'k':
+            // Navigate up (if not typing)
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+              messagesContainerRef.current.scrollTop -= 100;
+              e.preventDefault();
+            }
+            break;
+            
+          case 'u':
+            // Toggle users panel (if not typing)
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+              setShowUsersList(prev => !prev);
+              e.preventDefault();
+              showCommandFeedback(showUsersList ? 'Users panel closed' : 'Users panel opened');
+            }
+            break;
+            
+          case 't':
+            // Toggle theme (if not typing)
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+              toggleTheme();
+              e.preventDefault();
+              showCommandFeedback(isDarkMode ? 'Light theme activated' : 'Dark theme activated');
+            }
+            break;
+            
+          case 's':
+            // Toggle status (if not typing)
+            if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+              setShowStatusModal(prev => !prev);
+              e.preventDefault();
+              showCommandFeedback('Status modal toggled');
+            }
+            break;
+            
+          case 'n':
+            // Next search result
+            if (searchResults.length > 0) {
+              navigateResults('next');
+              e.preventDefault();
+              showCommandFeedback('Next search result');
+            }
+            break;
+            
+          case 'N':
+            // Previous search result
+            if (searchResults.length > 0) {
+              navigateResults('prev');
+              e.preventDefault();
+              showCommandFeedback('Previous search result');
+            }
+            break;
+            
+          default:
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    showShortcutsModal,
+    showSearch,
+    showEmojiPicker,
+    showThemeSettings,
+    showUsersList,
+    showThreads,
+    searchResults,
+    isDarkMode,
+    lastKeyPressTime,
+    keySequence,
+    applyFormatting,
+    toggleTheme,
+    navigateResults
+  ]);
+  
+  // Show temporary command feedback
+  const showCommandFeedback = (message) => {
+    showNotification(message, 'command');
+  };
+
+  // Render keyboard shortcuts modal
+  const renderShortcutsModal = () => {
+    if (!showShortcutsModal) return null;
+    
+    const shortcutsList = [
+      { key: 'Ctrl + /', description: 'Focus search' },
+      { key: 'Ctrl + K', description: 'Show keyboard shortcuts' },
+      { key: 'Ctrl + .', description: 'Focus message input' },
+      { key: 'Ctrl + B', description: 'Bold text (when typing)' },
+      { key: 'Ctrl + I', description: 'Italic text (when typing)' },
+      { key: 'ESC', description: 'Close panels/modals' },
+      { key: 'J', description: 'Scroll down (when not typing)' },
+      { key: 'K', description: 'Scroll up (when not typing)' },
+      { key: 'U', description: 'Toggle users panel' },
+      { key: 'T', description: 'Toggle dark/light theme' },
+      { key: 'S', description: 'Toggle status modal' },
+      { key: 'N', description: 'Next search result' },
+      { key: 'Shift + N', description: 'Previous search result' },
+      { key: 'GG', description: 'Scroll to top of chat' },
+      { key: 'G', description: 'Scroll to bottom of chat' }
+    ];
+    
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">Keyboard Shortcuts</h2>
+            <button
+              onClick={() => setShowShortcutsModal(false)}
+              className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+            >
+              <FiX size={24} />
+            </button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {shortcutsList.map((shortcut, index) => (
+              <div key={index} className="flex items-center p-2 border border-gray-200 dark:border-gray-700 rounded">
+                <kbd className="px-2 py-1 mr-3 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded font-mono text-sm">
+                  {shortcut.key}
+                </kbd>
+                <span className="text-gray-700 dark:text-gray-300">{shortcut.description}</span>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900 dark:bg-opacity-20 rounded">
+            <h3 className="font-medium text-blue-700 dark:text-blue-300 mb-2">Pro Tips</h3>
+            <ul className="text-sm text-blue-600 dark:text-blue-400 space-y-1 list-disc pl-5">
+              <li>Most shortcuts won't trigger when you're typing in an input field</li>
+              <li>Use keyboard navigation to quickly jump between messages and search results</li>
+              <li>Type "gg" quickly to jump to the top of chat history (like in Vim)</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
+  };
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -1669,6 +1930,16 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
             <FiSettings className="w-5 h-5 text-gray-600 dark:text-gray-300" />
           </button>
           {renderThemeSettings()}
+          <button
+            className="p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-700"
+            onClick={() => setShowShortcutsModal(true)}
+            title="Keyboard Shortcuts"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+          </button>
         </div>
       </header>
       
@@ -1827,6 +2098,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
               <button 
                 onClick={() => fileInputRef.current.click()} 
                 className="p-2 text-gray-500 dark:text-gray-400 hover:text-blue-500 dark:hover:text-blue-400"
+                title="Attach file (Ctrl+P)"
               >
                 <FiPaperclip />
               </button>
@@ -1840,6 +2112,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
               
               <input
                 id="message-input"
+                ref={messageInputRef}
                 type="text"
                 value={message}
                 onChange={(e) => {
@@ -1848,7 +2121,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                     handleTyping();
                   }
                 }}
-                placeholder="Type a message..."
+                placeholder="Type a message... (Ctrl+. to focus)"
                 className="flex-1 p-2 border dark:border-gray-600 dark:bg-gray-800 rounded-l"
               />
               
@@ -1899,6 +2172,9 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
           <FiArrowDown size={20} />
         </button>
       )}
+      
+      {/* Keyboard shortcuts overlay */}
+      {renderShortcutsModal()}
     </div>
   );
 };
