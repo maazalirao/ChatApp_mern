@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar } from 'react-icons/fi';
+import { FiX, FiUsers, FiArrowLeft, FiSearch, FiChevronUp, FiChevronDown, FiSettings, FiArrowDown, FiPaperclip, FiFile, FiImage, FiVideo, FiMusic, FiDownload, FiBell, FiBellOff, FiVolume, FiVolumeX, FiMoon, FiSun, FiCornerDownRight, FiMessageSquare, FiChevronRight, FiMaximize, FiZoomIn, FiZoomOut, FiRotateCw, FiClock, FiCalendar, FiCheck } from 'react-icons/fi';
 import { FaMicrophone, FaStop } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { FaPaperPlane } from 'react-icons/fa';
@@ -85,6 +85,8 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
   const [scheduledDate, setScheduledDate] = useState('');
   const [scheduledMessages, setScheduledMessages] = useState([]);
   const [showScheduledMessages, setShowScheduledMessages] = useState(false);
+  const [readReceipts, setReadReceipts] = useState({});
+  const [showReadReceipts, setShowReadReceipts] = useState(true);
   
   const { roomId } = useParams();
   const messageRefs = useRef({});
@@ -2399,6 +2401,212 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
     );
   };
   
+  // Mark messages as read when they become visible
+  const messageObserver = useRef(null);
+  
+  useEffect(() => {
+    // Initialize Intersection Observer to detect when messages are visible
+    const options = {
+      root: messagesContainerRef.current,
+      rootMargin: '0px',
+      threshold: 0.5, // Message is considered "read" when 50% visible
+    };
+    
+    const handleIntersection = (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const messageId = entry.target.dataset.messageId;
+          if (messageId) {
+            markMessageAsRead(Number(messageId));
+          }
+        }
+      });
+    };
+    
+    messageObserver.current = new IntersectionObserver(handleIntersection, options);
+    
+    // Observe all message elements
+    Object.values(messageRefs.current).forEach(element => {
+      if (element) {
+        messageObserver.current.observe(element);
+      }
+    });
+    
+    return () => {
+      if (messageObserver.current) {
+        messageObserver.current.disconnect();
+      }
+    };
+  }, [roomMessages]);
+  
+  // Update observer when new messages are added
+  useEffect(() => {
+    if (messageObserver.current) {
+      // Observe any new message elements
+      Object.values(messageRefs.current).forEach(element => {
+        if (element) {
+          messageObserver.current.observe(element);
+        }
+      });
+    }
+  }, [roomMessages]);
+  
+  // Mark a message as read by the current user
+  const markMessageAsRead = (messageId) => {
+    // Skip if it's the current user's message
+    const message = roomMessages.find(msg => msg.id === messageId);
+    if (!message || message.userId === 1) return; // Assuming current user ID is 1
+    
+    // Update read receipts for this message
+    setReadReceipts(prev => {
+      // Only update if this user hasn't already read this message
+      const currentReaders = prev[messageId] || [];
+      if (currentReaders.some(reader => reader.userId === 1)) return prev;
+      
+      const updatedReaders = [
+        ...currentReaders,
+        {
+          userId: 1,
+          username: 'You',
+          timestamp: new Date().toISOString()
+        }
+      ];
+      
+      // In a real application, you would emit this to the server
+      // socket.emit('messageRead', { messageId, userId: 1, timestamp: new Date().toISOString() });
+      
+      return {
+        ...prev,
+        [messageId]: updatedReaders
+      };
+    });
+  };
+  
+  // Toggle read receipts visibility
+  const toggleReadReceipts = () => {
+    setShowReadReceipts(prev => !prev);
+    showNotification(showReadReceipts 
+      ? 'Read receipts hidden' 
+      : 'Read receipts visible',
+      'info');
+  };
+  
+  // Dummy function to simulate other users reading messages
+  useEffect(() => {
+    // Skip if there are no messages
+    if (roomMessages.length === 0) return;
+    
+    // Simulate other users reading messages after random delays
+    const simulateReads = setTimeout(() => {
+      // Get the IDs of the latest messages (last 3)
+      const latestMessageIds = roomMessages
+        .slice(-3)
+        .map(msg => msg.id)
+        .filter(id => id);
+      
+      if (latestMessageIds.length === 0) return;
+      
+      // Add read receipts for random users
+      setReadReceipts(prev => {
+        const updated = { ...prev };
+        
+        latestMessageIds.forEach(messageId => {
+          // Get existing readers or initialize empty array
+          const currentReaders = prev[messageId] || [];
+          
+          // Add some random readers (users 2, 3, 4)
+          const newReaders = [];
+          
+          // Alice (user 2) always reads quickly
+          if (!currentReaders.some(r => r.userId === 2)) {
+            newReaders.push({
+              userId: 2,
+              username: 'Alice',
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          // Bob (user 3) reads sometimes
+          if (Math.random() > 0.3 && !currentReaders.some(r => r.userId === 3)) {
+            newReaders.push({
+              userId: 3,
+              username: 'Bob',
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          // Charlie (user 4) reads rarely
+          if (Math.random() > 0.7 && !currentReaders.some(r => r.userId === 4)) {
+            newReaders.push({
+              userId: 4,
+              username: 'David',
+              timestamp: new Date().toISOString()
+            });
+          }
+          
+          updated[messageId] = [...currentReaders, ...newReaders];
+        });
+        
+        return updated;
+      });
+    }, 3000 + Math.random() * 5000); // Random delay between 3-8 seconds
+    
+    return () => clearTimeout(simulateReads);
+  }, [roomMessages]);
+  
+  // Render read receipts for a message
+  const renderReadReceipts = (messageId) => {
+    if (!showReadReceipts) return null;
+    
+    const readers = readReceipts[messageId] || [];
+    if (readers.length === 0) return null;
+    
+    // Don't show read receipts for messages from other users
+    const message = roomMessages.find(msg => msg.id === messageId);
+    if (!message || message.userId !== 1) return null;
+    
+    // Format the display based on how many users have read it
+    return (
+      <div className="flex items-center mt-1 text-xs text-gray-500 dark:text-gray-400">
+        <div className="flex -space-x-1 mr-1">
+          {readers.slice(0, 3).map((reader, index) => (
+            <div 
+              key={reader.userId} 
+              className="w-4 h-4 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center"
+              style={{ zIndex: 10 - index }}
+              title={`${reader.username} read at ${new Date(reader.timestamp).toLocaleTimeString()}`}
+            >
+              <FiCheck size={8} className="text-gray-700 dark:text-gray-300" />
+            </div>
+          ))}
+        </div>
+        <span className="text-xs">
+          {readers.length === 1 ? 'Read by 1 person' : `Read by ${readers.length} people`}
+        </span>
+      </div>
+    );
+  };
+  
+  // Add read receipt toggle to settings
+  const renderReadReceiptSetting = () => (
+    <div className="mt-3 flex items-center justify-between">
+      <span className="text-sm text-gray-700 dark:text-gray-300">Show read receipts</span>
+      <button
+        onClick={toggleReadReceipts}
+        className={`relative inline-flex items-center h-6 rounded-full w-11 ${
+          showReadReceipts ? 'bg-blue-600' : 'bg-gray-300 dark:bg-gray-600'
+        }`}
+      >
+        <span className="sr-only">Toggle read receipts</span>
+        <span
+          className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+            showReadReceipts ? 'translate-x-6' : 'translate-x-1'
+          }`}
+        />
+      </button>
+    </div>
+  );
+  
   return (
     <div className={`flex flex-col h-screen ${isDarkMode ? 'dark bg-gray-900 text-white' : 'bg-white text-gray-800'}`}>
       {/* Notifications */}
@@ -2604,6 +2812,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                         isCurrentResult ? 'bg-yellow-100 dark:bg-yellow-900' : ''
                       }`}
                       ref={el => messageRefs.current[msg.id] = el}
+                      data-message-id={msg.id}
                     >
                       <div className="flex flex-col">
                         <div className="flex items-center text-xs text-gray-500 mb-1">
@@ -2634,12 +2843,13 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                       isCurrentResult ? 'bg-yellow-100 dark:bg-yellow-900' : ''
                     }`}
                     ref={el => messageRefs.current[msg.id] = el}
+                    data-message-id={msg.id}
                   >
                     <div className="flex flex-col">
                       <span className="text-xs text-gray-500 mb-1">{msg.username}</span>
                       <div className="flex items-start">
                         <div className="bg-blue-500 text-white p-3 rounded-lg inline-block">
-                          {msg.type === 'text' ? formatMessageText(msg.text) : msg.type === 'image' || msg.type === 'file' ? renderEnhancedAttachmentInMessage(msg) : null}
+                          {formatMessageText(msg.text)}
                         </div>
                         <button 
                           onClick={() => setActiveReactionMessage(msg.id)}
@@ -2649,6 +2859,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
                         </button>
                       </div>
                       {renderReactions(msg.id)}
+                      {renderReadReceipts(msg.id)}
                       
                       {/* Add thread button */}
                       {renderThreadButton(msg)}
@@ -2767,6 +2978,16 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
         {showScheduleModal && renderScheduleMessageModal()}
         {showScheduledMessages && renderScheduledMessagesList()}
       </AnimatePresence>
+      
+      <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900 dark:bg-opacity-20 rounded">
+        <h3 className="font-semibold mb-3 text-gray-700 dark:text-gray-200">Preferences</h3>
+        
+        <div className="space-y-4">
+          {/* ... existing theme settings ... */}
+        </div>
+          
+        {renderReadReceiptSetting()}
+      </div>
     </div>
   );
 };
