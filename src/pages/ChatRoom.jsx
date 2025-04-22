@@ -312,7 +312,7 @@ const ChatRoom = ({ socket, username, room, setRoom, navigate }) => {
       
       return {
         ...prevReactions,
-        [message]: updatedMessageReactions
+        [messageid]: updatedMessageReactions
       };
     });
     
